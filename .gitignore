@@ -1,0 +1,16 @@
+# Segredos: tokens do WhatsApp, Claude e Univen nunca entram no git
+.env
+.env.*
+!.env.example
+
+node_modules/
+dist/
+supabase/.temp/
+supabase/.branches/
+.DS_Store
+
+# Gerados localmente
+graphify-out/
+__pycache__/
+*.pyc
+.claude/settings.local.json

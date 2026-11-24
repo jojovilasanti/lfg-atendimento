@@ -1,0 +1,4 @@
+# faster-whisper 1.2.1 chama av.open(metadata_errors=...), que o PyAV 16+ não
+# aceita mais: sem a versão fixa, todo áudio falha ao ser lido.
+faster-whisper==1.2.1
+av==15.1.0

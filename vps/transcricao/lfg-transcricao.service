@@ -1,0 +1,19 @@
+[Unit]
+Description=Transcrição dos áudios do WhatsApp da LFG (Whisper)
+After=network.target
+
+[Service]
+User=lfg-transcricao
+EnvironmentFile=/etc/lfg-transcricao.env
+ExecStart=/opt/lfg-transcricao/venv/bin/python /opt/lfg-transcricao/servico.py
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/lfg-transcricao
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

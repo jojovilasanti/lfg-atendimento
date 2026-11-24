@@ -1,0 +1,104 @@
+# VPS da LFG Imóveis (Hostinger): painel da equipe, transcrição de áudios e site.
+# O banco, a IA e o WhatsApp ficam no Supabase.
+#
+# Cada endereço precisa de um registro A apontando para o IP da VPS
+# (200.141.19.215); o Caddy pede o certificado HTTPS sozinho.
+
+(seguranca) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}
+
+# Endereços de teste: fora do Google, mesmo se um link escapar.
+(fora_do_google) {
+	header X-Robots-Tag "noindex, nofollow"
+}
+
+# Nome da VPS na Hostinger: fica só com a transcrição, usada pelas funções do Supabase.
+srv2083149.hstgr.cloud {
+	import seguranca
+
+	# Transcrição de áudios e conversão dos áudios do painel (serviço local com
+	# token; ver vps/transcricao).
+	@audio path /transcrever* /converter
+	handle @audio {
+		reverse_proxy 127.0.0.1:8090
+	}
+
+	# O painel mudou para lfg.jojodigitals.com: links antigos, favoritos e os
+	# avisos já enviados aos corretores levam para lá (o #leads/... vai junto).
+	# A pasta antiga (/var/www/lfg-painel) fica no servidor para voltar atrás.
+	handle {
+		redir https://lfg.jojodigitals.com{uri} 302
+	}
+}
+
+# Painel da equipe (CRM), publicado por scripts/publicar-painel.sh. Os arquivos de
+# nome versionado ficam em cache por um ano; a página principal é sempre
+# conferida, para cada publicação chegar na hora.
+lfg.jojodigitals.com {
+	import seguranca
+
+	# Página pública de cada corretor (/corretor/<slug>), gerada junto com o site
+	# por /opt/lfg-site/gerar.py. Feita para ser compartilhada: fica visível ao Google
+	# e com prévia (Open Graph) no WhatsApp e no Instagram.
+	handle /corretor* {
+		root * /var/www/lfg-site
+		header Cache-Control "public, max-age=300"
+		try_files {path} {path}/index.html /corretor/index.html
+		file_server
+	}
+
+	# Imóvel compartilhado pelo corretor (/imovel/<REF>?c=<slug>): página leve,
+	# gerada junto com o site em /compartilhar/<REF>/, com prévia no WhatsApp.
+	handle_path /imovel/* {
+		root * /var/www/lfg-site/compartilhar
+		header Cache-Control "public, max-age=300"
+		header X-Robots-Tag "noindex"
+		try_files {path}/index.html {path}/ /index.html
+		file_server
+	}
+
+	# Volta da autorização do Google Agenda: repassa para a função do Supabase,
+	# que guarda a conexão e manda a pessoa de volta ao painel.
+	handle /google/retorno {
+		rewrite * /functions/v1/google-agenda/retorno?{query}
+		reverse_proxy https://nlbonjxmzmwsyuirxnzu.supabase.co {
+			header_up Host {upstream_hostport}
+		}
+	}
+
+	handle {
+		import fora_do_google
+		root * /var/www/lfg-crm
+		@versionados path /assets/*
+		header @versionados Cache-Control "public, max-age=31536000, immutable"
+		@pagina not path /assets/*
+		header @pagina Cache-Control "no-cache"
+		header /manifest.webmanifest Content-Type "application/manifest+json"
+		try_files {path} /index.html
+		file_server
+	}
+}
+
+# Site da imobiliária em teste: páginas geradas a cada 5 minutos por
+# /opt/lfg-site/gerar.py (scripts/instalar-site.sh).
+site.lfg.jojodigitals.com {
+	import seguranca
+	import fora_do_google
+
+	root * /var/www/lfg-site
+	header Cache-Control "no-cache"
+	file_server
+	handle_errors {
+		@nao_existe expression {err.status_code} == 404
+		rewrite @nao_existe /404.html
+		file_server
+	}
+}
