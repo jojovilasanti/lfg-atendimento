@@ -394,11 +394,31 @@ async function avisarVisita(visitaId: string, evento: string): Promise<Response>
   return json({ ok: true, enviados, falhas, entregues });
 }
 
+// Alguém entrou numa demanda (participante novo, ou responsável de uma demanda
+// que outra pessoa criou): notificação no celular de cada um.
+async function avisarDemanda(demandaId: string, pessoas: string[]): Promise<Response> {
+  const demanda = exigir(
+    await banco.from("demandas").select("id, titulo, prazo, status, responsavel_id, criador:corretores!demandas_criada_por_fkey(nome)").eq("id", demandaId).maybeSingle(),
+    "ler demanda",
+  ) as { id: string; titulo: string; prazo: string; status: string; responsavel_id: string; criador: { nome: string } | null } | null;
+  if (!demanda || demanda.status === "concluida") return json({ ok: false, motivo: "demanda inexistente ou concluída" });
+  const quando = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Campo_Grande", weekday: "short", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).format(new Date(demanda.prazo));
+  const quem = demanda.criador?.nome?.split(" ")[0];
+  const entregues = await notificar(pessoas, {
+    titulo: pessoas.length === 1 && pessoas[0] === demanda.responsavel_id ? "Nova demanda para você" : "Você foi incluído numa demanda",
+    texto: resumir(`${demanda.titulo} · prazo ${quando}${quem ? ` · por ${quem}` : ""}`, 180),
+    url: "/#demandas",
+    tag: `demanda-${demanda.id}`,
+  }).catch(() => 0);
+  return json({ ok: true, entregues });
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ erro: "Use POST." }, 405);
   if (!(await confereChave("avisos", req.headers.get("x-avisos-chave")))) return json({ erro: "Chave inválida." }, 401);
 
-  const corpo = await req.json().catch(() => ({})) as { atribuicao_id?: string; mensagem_id?: number; notificar_mensagem_id?: number; tarefa_id?: string; clique_id?: number; prazo_perdido_id?: string; visita_id?: string; evento?: string };
+  const corpo = await req.json().catch(() => ({})) as { atribuicao_id?: string; mensagem_id?: number; notificar_mensagem_id?: number; tarefa_id?: string; clique_id?: number; prazo_perdido_id?: string; visita_id?: string; evento?: string; demanda_id?: string; pessoas?: string[] };
+  if (corpo.demanda_id) return avisarDemanda(corpo.demanda_id, Array.isArray(corpo.pessoas) ? corpo.pessoas.filter((p) => typeof p === "string") : []);
   if (corpo.visita_id) return avisarVisita(corpo.visita_id, corpo.evento ?? "");
   if (corpo.prazo_perdido_id) return avisarPrazoPerdido(corpo.prazo_perdido_id);
   if (corpo.clique_id) return avisarClique(Number(corpo.clique_id));

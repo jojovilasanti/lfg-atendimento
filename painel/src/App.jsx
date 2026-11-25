@@ -234,7 +234,7 @@ export default function App() {
 
   return (
     <>
-      <header className={`topo ${contaAberta ? "conta-aberta" : ""}`}>
+      <header className={`topo ${contaAberta ? "conta-aberta" : ""}${recolhido ? " menu-recolhido" : ""}`}>
         <div className="marca">
           {/* Só a logo: um toque nela volta para o Início. */}
           <a className="marca-link" href="#inicio" onClick={(e) => { e.preventDefault(); ir("inicio"); }} aria-label={`${empresa.nome}: ir para o Início`}>

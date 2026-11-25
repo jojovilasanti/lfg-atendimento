@@ -1,6 +1,6 @@
 // Agenda de demandas da equipe: lista e calendário (dia, semana, mês).
-// Todos veem as demandas de todos. O gestor cria para qualquer pessoa; os
-// outros, só para si. O responsável muda
+// Todos veem as demandas de todos. O gestor cria para qualquer pessoa e inclui
+// participantes; os outros criam só para si. Responsável e participantes mudam
 // o status; quem criou (e o gestor) edita e exclui. As regras ficam no banco
 // (migração demandas); a tela só esconde o que a pessoa não pode fazer.
 import { useState } from "react";
@@ -48,18 +48,21 @@ export default function Demandas() {
 
   const { dados, erro } = useCarregar(async () => {
     const [rDemandas, rEquipe] = await Promise.all([
-      supabase.from("demandas").select("*").order("prazo").limit(1000),
+      supabase.from("demandas").select("*, demanda_participantes(corretor_id)").order("prazo").limit(1000),
       supabase.from("corretores").select("id, nome, papel").eq("ativo", true).order("nome"),
     ]);
     const equipe = exigir(rEquipe);
-    return { demandas: exigir(rDemandas), equipe, nomes: new Map(equipe.map((c) => [c.id, c.nome])) };
+    // participantes: lista de ids, além do responsável.
+    const demandas = exigir(rDemandas).map(({ demanda_participantes: lista, ...d }) => ({ ...d, participantes: (lista ?? []).map((x) => x.corretor_id) }));
+    return { demandas, equipe, nomes: new Map(equipe.map((c) => [c.id, c.nome])) };
   }, [versao]);
 
   if (!dados) return <section className="vista"><Erro mensagem={erro} /><Carregando /></section>;
   const { demandas, equipe, nomes } = dados;
   const passaFiltro = FILTROS.find(([id]) => id === filtro)[2];
-  const visiveis = demandas.filter((d) => passaFiltro(d) && (pessoa === "todos" || d.responsavel_id === pessoa));
-  const contagem = (id) => demandas.filter((d) => FILTROS.find(([f]) => f === id)[2](d) && (pessoa === "todos" || d.responsavel_id === pessoa)).length;
+  const daPessoa = (d) => pessoa === "todos" || d.responsavel_id === pessoa || d.participantes.includes(pessoa);
+  const visiveis = demandas.filter((d) => passaFiltro(d) && daPessoa(d));
+  const contagem = (id) => demandas.filter((d) => FILTROS.find(([f]) => f === id)[2](d) && daPessoa(d)).length;
   const porDia = new Map();
   for (const d of visiveis) {
     const dia = diaIso(d.prazo);
@@ -93,7 +96,7 @@ export default function Demandas() {
         <Segmento rotulo="Situação das demandas" valor={filtro} aoMudar={setFiltro} opcoes={FILTROS.map(([id, nome]) => ({ id, rotulo: nome, conta: contagem(id) }))} />
         {(
           <label className="campo campo-pessoa">
-            <span className="invisivel">Responsável</span>
+            <span className="invisivel">Pessoa (responsável ou participante)</span>
             <select value={pessoa} onChange={(e) => setPessoa(e.target.value)}>
               <option value="todos">Toda a equipe</option>
               {equipe.map((c) => <option key={c.id} value={c.id}>{c.id === eu.id ? `${c.nome} (eu)` : c.nome}</option>)}
@@ -208,6 +211,13 @@ function CartaoDemanda({ d, eu, nomes, compacto, aoAbrir }) {
             <EtiquetaPrazo prazo={d.prazo} finalizado={d.status === "concluida"} />
             {d.status === "em_andamento" && <span className={`etiqueta ${cor}`}>{nomeStatus}</span>}
             {d.responsavel_id !== eu.id && <span className="mudo pequeno">para {nomes.get(d.responsavel_id) ?? "—"}</span>}
+            {d.participantes.length > 0 && (
+              <span className="participantes-demanda" title={`Participantes: ${d.participantes.map((id) => nomes.get(id) ?? "—").join(", ")}`}>
+                {d.participantes.includes(eu.id) ? "você participa" : null}
+                {d.participantes.includes(eu.id) && d.participantes.length > 1 ? " · " : null}
+                {d.participantes.filter((id) => id !== eu.id).length > 0 && `com ${nomesCurtos(d.participantes.filter((id) => id !== eu.id), nomes)}`}
+              </span>
+            )}
             {d.criada_por && d.criada_por !== eu.id && d.criada_por !== d.responsavel_id && <span className="mudo pequeno">criada por {nomes.get(d.criada_por) ?? "—"}</span>}
           </span>
         )}
@@ -216,11 +226,24 @@ function CartaoDemanda({ d, eu, nomes, compacto, aoAbrir }) {
   );
 }
 
+// "Ana, Bruno e mais 2": primeiro nome, até 2 pessoas.
+function nomesCurtos(ids, nomes) {
+  const lista = ids.map((id) => (nomes.get(id) ?? "—").split(" ")[0]);
+  return lista.length <= 2 ? lista.join(" e ") : `${lista.slice(0, 2).join(", ")} e mais ${lista.length - 2}`;
+}
+
 function FormularioDemanda({ demanda, equipe, nomes, aoFechar, aoSalvar }) {
   const { eu, souGestorPleno } = useSessao();
   const nova = !demanda;
   const podeEditar = nova || souGestorPleno || demanda.criada_por === eu.id;
-  const podeMudarStatus = podeEditar || demanda.responsavel_id === eu.id;
+  const podeMudarStatus = podeEditar || demanda.responsavel_id === eu.id || (demanda.participantes ?? []).includes(eu.id);
+  const [participantes, setParticipantes] = useState(() => new Set(demanda?.participantes ?? []));
+  const marcarParticipante = (id, marcado) => setParticipantes((atual) => {
+    const novo = new Set(atual);
+    if (marcado) novo.add(id);
+    else novo.delete(id);
+    return novo;
+  });
   const [titulo, setTitulo] = useState(demanda?.titulo ?? "");
   const [descricao, setDescricao] = useState(demanda?.descricao ?? "");
   const [responsavel, setResponsavel] = useState(demanda?.responsavel_id ?? eu.id);
@@ -248,6 +271,8 @@ function FormularioDemanda({ demanda, equipe, nomes, aoFechar, aoSalvar }) {
       if (podeEditar) {
         exigir(await supabase.rpc("salvar_demanda", {
           p_id: demanda?.id ?? null, p_titulo: titulo, p_descricao: descricao, p_responsavel_id: responsavel, p_prazo: new Date(prazo).toISOString(), p_status: status,
+          // Só o gestor mexe nos participantes; para os outros vai nulo (não muda nada).
+          p_participantes: souGestorPleno ? [...participantes].filter((id) => id !== responsavel) : null,
         }));
       } else {
         exigir(await supabase.rpc("mudar_status_demanda", { p_id: demanda.id, p_status: status }));
@@ -279,6 +304,21 @@ function FormularioDemanda({ demanda, equipe, nomes, aoFechar, aoSalvar }) {
             <input type="datetime-local" required value={prazo} disabled={!podeEditar} onChange={(e) => setPrazo(e.target.value)} />
           </label>
         </div>
+        {souGestorPleno && podeEditar ? (
+          <fieldset className="participantes-campo">
+            <legend>Participantes <small className="mudo">(opcional · cada um recebe notificação e a demanda entra na agenda dele)</small></legend>
+            <div className="participantes-opcoes">
+              {equipe.filter((c) => c.id !== responsavel).map((c) => (
+                <label key={c.id} className={`participante-opcao${participantes.has(c.id) ? " marcado" : ""}`}>
+                  <input type="checkbox" checked={participantes.has(c.id)} onChange={(e) => marcarParticipante(c.id, e.target.checked)} />
+                  {c.id === eu.id ? `${c.nome} (eu)` : c.nome}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : (demanda?.participantes ?? []).length > 0 && (
+          <p className="pequeno" style={{ margin: 0 }}><b>Participantes:</b> {demanda.participantes.map((id) => nomes.get(id) ?? "—").join(", ")}</p>
+        )}
         <fieldset className="grupo-status" disabled={!podeMudarStatus}>
           <legend>Status</legend>
           <div className="filtros">

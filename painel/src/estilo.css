@@ -1562,3 +1562,25 @@ button.botao-fechar, .folha-mais button.botao-fechar {
 /* Tela Site: cada rede com o liga/desliga ao lado do link */
 .linha-rede { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: end; }
 .linha-rede .interruptor { margin-bottom: 10px; }
+
+/* Topo do computador: a logo ocupa a largura do menu lateral e a busca fica no
+   meio da área das telas. */
+@media (min-width: 901px) {
+  :root { --altura-topo-pc: 73px; }
+  .topo { display: grid; grid-template-columns: 220px minmax(0, 1fr) auto; gap: 16px; min-height: var(--altura-topo-pc); padding-block: 8px; padding-left: 0; }
+  .topo.menu-recolhido { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .topo .marca { padding-left: 24px; }
+  .topo .marca img { height: 54px; max-width: 180px; object-fit: contain; object-position: left center; }
+  .topo .marca img.logo-propria { height: 52px; }
+  .topo .abrir-busca { justify-self: center; width: min(560px, 100%); flex: none; margin-left: 0; }
+  .topo .topo-direita { margin-left: 0; flex-wrap: nowrap; }
+}
+
+/* Demandas: participantes */
+.participantes-demanda { color: var(--limao-texto); font-size: var(--tam-mini); font-weight: 700; }
+.participantes-campo { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px; }
+.participantes-campo legend { padding: 0; margin-bottom: 8px; font-weight: var(--peso-forte, 700); }
+.participantes-opcoes { display: flex; flex-wrap: wrap; gap: 6px; }
+.participante-opcao { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 6px 12px; border: 1px solid var(--linha-forte); border-radius: var(--raio-pilula); background: var(--campo-fundo); cursor: pointer; font-size: var(--tam-pequeno); }
+.participante-opcao.marcado { border-color: var(--limao); background: var(--pronto-fundo); color: var(--limao-texto); font-weight: 700; }
+.participante-opcao input { margin: 0; accent-color: var(--limao); }

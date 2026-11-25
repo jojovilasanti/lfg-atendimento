@@ -121,10 +121,12 @@ type Desejado = { corretor_id: string; evento: Record<string, unknown> };
 
 async function eventosDesejados(origem: string, id: string): Promise<Desejado[]> {
   if (origem === "demanda") {
-    const { data: d } = await banco.from("demandas").select("id, titulo, descricao, responsavel_id, prazo, status").eq("id", id).maybeSingle();
+    const { data: d } = await banco.from("demandas").select("id, titulo, descricao, responsavel_id, prazo, status, demanda_participantes(corretor_id)").eq("id", id).maybeSingle();
     if (!d) return [];
-    return [{
-      corretor_id: d.responsavel_id,
+    // O mesmo evento vai para o responsável e para cada participante.
+    const pessoas = [...new Set([d.responsavel_id, ...((d.demanda_participantes ?? []) as { corretor_id: string }[]).map((p) => p.corretor_id)])];
+    return pessoas.map((corretor_id) => ({
+      corretor_id,
       evento: {
         summary: `${d.status === "concluida" ? "✅ " : "📋 "}${d.titulo}`,
         description: [d.descricao, `Status: ${STATUS[d.status] ?? d.status}`, `Demandas no painel: ${PAINEL}/#demandas`].filter(Boolean).join("\n\n"),
@@ -132,7 +134,7 @@ async function eventosDesejados(origem: string, id: string): Promise<Desejado[]>
         end: { dateTime: somarMinutos(d.prazo, 30), timeZone: FUSO },
         extendedProperties: { private: { lfg: `demanda:${d.id}` } },
       },
-    }];
+    }));
   }
   const { data: v } = await banco.from("visitas")
     .select("id, tipo, local, inicio, fim, cliente_nome, cliente_telefone, corretor_id, tipo_visita, observacoes, status, imoveis(referencia, titulo, tipo, endereco, numero, bairro, cidade)")
@@ -216,7 +218,11 @@ async function sincronizar(origem: string, id: string) {
 // Ao conectar: leva para a agenda o que já está marcado daqui para frente.
 async function levarOQueJaExiste(corretorId: string) {
   const desde = new Date(Date.now() - 86_400_000).toISOString();
-  const { data: demandas } = await banco.from("demandas").select("id").eq("responsavel_id", corretorId).neq("status", "concluida").gte("prazo", desde).limit(200);
+  const { data: comoParticipante } = await banco.from("demanda_participantes").select("demanda_id").eq("corretor_id", corretorId).limit(500);
+  const idsComoParticipante = (comoParticipante ?? []).map((p) => p.demanda_id);
+  const { data: demandas } = await banco.from("demandas").select("id")
+    .or(`responsavel_id.eq.${corretorId}${idsComoParticipante.length ? `,id.in.(${idsComoParticipante.join(",")})` : ""}`)
+    .neq("status", "concluida").gte("prazo", desde).limit(200);
   const { data: visitas } = await banco.from("visitas").select("id").eq("corretor_id", corretorId).in("status", ["agendada", "confirmada"]).gte("inicio", desde).limit(200);
   for (const d of demandas ?? []) await sincronizar("demanda", d.id);
   for (const v of visitas ?? []) await sincronizar("visita", v.id);
