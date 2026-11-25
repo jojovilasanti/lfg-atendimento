@@ -24,3 +24,17 @@ export const MODELOS_FOLLOWUP = TEXTOS_FOLLOWUP.map((texto, i) => ({
 
 // Janela de texto livre: 23 horas (1 hora de folga sobre as 24 da Meta).
 export const JANELA_LIVRE_FOLLOWUP_MS = 23 * 3600 * 1000;
+
+// Follow-up dos leads com corretor (função followup-corretor) quando o cliente
+// não escreve há mais de 23 horas. {{1}} é o primeiro nome do cliente.
+// Texto aprovado pelo gestor em 24/11/2026.
+export const MODELO_RETOMAR_CONVERSA = {
+  name: "retomar_conversa",
+  language: "pt_BR",
+  category: "MARKETING",
+  components: [{
+    type: "BODY",
+    text: "Oi, {{1}}! Passando para saber se ainda posso te ajudar com o que conversamos. Se quiser seguir, é só responder por aqui.",
+    example: { body_text: [["Maria"]] },
+  }],
+};

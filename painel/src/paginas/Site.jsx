@@ -355,9 +355,9 @@ export default function Site() {
                         <Interruptor ligado={secao.visivel !== false} aoMudar={(ligado) => mudarSecao(n, { visivel: ligado })} rotulo={`Mostrar ${NOME_DA_SECAO[secao.id][0]}`} />
                       </div>
                     </div>
-                    {secao.id !== "numeros" && secao.visivel !== false && (
+                    {secao.id !== "numeros" && secao.id !== "chamadas" && secao.visivel !== false && (
                       <label className="campo">Título da seção
-                        <input maxLength={60} placeholder={secao.id === "sobre" ? `Sobre a ${campos.nome ?? ""}` : secao.id === "equipe" ? "Nossa equipe" : secao.id === "empreendimentos" ? "Lançamentos e empreendimentos" : "Imóveis em destaque"} value={secao.titulo ?? ""} onChange={(e) => mudarSecao(n, { titulo: e.target.value })} />
+                        <input maxLength={60} placeholder={secao.id === "sobre" ? `Sobre a ${campos.nome ?? ""}` : secao.id === "equipe" ? "Nossa equipe" : secao.id === "empreendimentos" ? "Lançamentos e empreendimentos" : secao.id === "bairros" ? "Bairros para começar" : "Imóveis em destaque"} value={secao.titulo ?? ""} onChange={(e) => mudarSecao(n, { titulo: e.target.value })} />
                       </label>
                     )}
                   </li>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BotaoFechar, Carregando, nomeDoPapel, useFecharComEsc } from "./comum.jsx";
+import BuscaRapida from "./base/BuscaRapida.jsx";
 import Agenda from "./paginas/Agenda.jsx";
 import Bolsao from "./paginas/Bolsao.jsx";
 import Configuracoes from "./paginas/Configuracoes.jsx";
@@ -13,6 +14,7 @@ import Plantao from "./paginas/Plantao.jsx";
 import Disparos from "./paginas/Disparos.jsx";
 import Empreendimentos from "./paginas/Empreendimentos.jsx";
 import Portais from "./paginas/Portais.jsx";
+import NaoClientes from "./paginas/NaoClientes.jsx";
 import Site from "./paginas/Site.jsx";
 import { AvisoNotificacoes } from "./Notificacoes.jsx";
 import { logoDaEmpresa, useSessao } from "./sessao.jsx";
@@ -25,6 +27,7 @@ const MENU = [
   ["bolsao", "Bolsão", "Leads que ninguém assumiu", <g key="b"><path d="M5 8h14l-1.5 12h-11z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" /></g>, "Bolsão"],
   ["plantao", "Plantão", "Rodízio dos corretores", <g key="p"><circle cx="12" cy="13" r="8" /><path d="M12 9v4l3 2M9 2h6" /></g>, "Plantão"],
   ["agenda", "Agenda", "Visitas e compromissos", <g key="a"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4M8 14h3v3H8z" /></g>, "Agenda"],
+  ["naoclientes", "Não clientes", "Empresas, prestadores e outros", <g key="n"><circle cx="12" cy="12" r="9" /><path d="M6 6l12 12" /></g>, "Não clientes"],
   ["demandas", "Demandas", "Tarefas da equipe", <g key="t"><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 8h8M8 12h8M8 16h5" /></g>, "Tarefas"],
   ["imoveis", "Imóveis", "Estoque e cadastro", <g key="m"><path d="M4 21V9l8-6 8 6v12" /><path d="M9 21v-6h6v6" /></g>, "Imóveis"],
   ["portais", "Portais", "Feeds para ZAP, Viva Real e OLX", <g key="o"><rect x="3" y="4" width="18" height="12" rx="2" /><path d="M8 20h8M12 16v4M7 9l3 3-3 3" /></g>, "Portais"],
@@ -38,12 +41,12 @@ const MENU = [
 // Menu agrupado no computador. No celular, cada perfil tem até 5 telas na barra
 // de baixo e o resto em "Mais".
 const GRUPOS = [
-  ["Atendimento", ["inicio", "leads", "bolsao", "plantao", "agenda", "demandas"]],
+  ["Atendimento", ["inicio", "leads", "bolsao", "naoclientes", "plantao", "agenda", "demandas"]],
   ["Estoque", ["imoveis", "portais"]],
   ["Marketing", ["site", "empreendimentos", "disparos"]],
   ["Ajustes", ["perfil", "configuracoes"]],
 ];
-const NO_MAIS = new Set(["portais", "site", "empreendimentos", "disparos", "configuracoes"]);
+const NO_MAIS = new Set(["naoclientes", "portais", "site", "empreendimentos", "disparos", "configuracoes"]);
 // No celular: a Agenda fica na barra de todos (no lugar de Tarefas); Demandas
 // vai para "Mais", junto com o Perfil do corretor e, no gestor, o Plantão.
 const noMais = (id, papel) => NO_MAIS.has(id) || id === "demandas" || (id === "plantao" && papel === "gestor") || (id === "bolsao" && papel === "administrativo") || (id === "perfil" && papel === "corretor");
@@ -52,7 +55,7 @@ const ICONE_MAIS = <g><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r
 // Telas da gestão (gestor e administrativo) e as só do gestor. Quem chegar numa
 // tela que não é do seu perfil, até pelo endereço direto, volta para o Início.
 // O banco e as funções recusam o resto (perfil_administrativo_regras).
-const SO_GESTAO = new Set(["configuracoes", "empreendimentos"]);
+const SO_GESTAO = new Set(["configuracoes", "empreendimentos", "naoclientes"]);
 const SO_GESTOR_PLENO = new Set(["site", "disparos", "portais"]);
 // O administrativo não acompanha atendimentos.
 const FORA_DO_ADMINISTRATIVO = new Set(["leads"]);
@@ -103,11 +106,41 @@ export default function App() {
   const [endereco, setEndereco] = useState(lerEndereco);
   const [tema, escolherTema] = useTema();
   const [aguardando, setAguardando] = useState(0);
+  // Bolsão: quantos leads há e quantos ainda não vi (o ponto verde de "novo").
+  const [bolsao, setBolsao] = useState({ total: 0, novos: 0 });
   // No celular, nome, tema e Sair ficam num menu que abre pelo botão da conta.
   const [contaAberta, setContaAberta] = useState(false);
   // No celular do gestor: Site, Disparos e Configurações abrem por "Mais".
   const [maisAberto, setMaisAberto] = useState(false);
   const fecharMenus = () => { setContaAberta(false); setMaisAberto(false); };
+  // Busca rápida: Ctrl+K (⌘K no Mac) de qualquer tela, ou o campo do topo.
+  const [buscaAberta, setBuscaAberta] = useState(false);
+  // Menu do computador recolhido (só os ícones). Fica guardado neste aparelho.
+  const [recolhido, setRecolhido] = useState(() => {
+    try {
+      return localStorage.getItem("lfg-menu-recolhido") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const recolher = (valor) => {
+    setRecolhido(valor);
+    try {
+      localStorage.setItem("lfg-menu-recolhido", valor ? "1" : "0");
+    } catch {
+      // sem armazenamento: vale só nesta visita
+    }
+  };
+  useEffect(() => {
+    const tecla = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setBuscaAberta((aberta) => !aberta);
+      }
+    };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, []);
   useFecharComEsc(contaAberta || maisAberto, fecharMenus);
 
   useEffect(() => {
@@ -125,6 +158,13 @@ export default function App() {
       .not("whatsapp", "like", "sim-%")
       .then(({ count }) => setAguardando(count ?? 0));
   }, [eu, versao]);
+
+  // Relê ao trocar de tela: quem acabou de sair do Bolsão já não tem novidade.
+  const vistaAtual = endereco.vista;
+  useEffect(() => {
+    if (!eu) return;
+    supabase.rpc("bolsao_resumo").then(({ data }) => data && setBolsao({ total: data.total ?? 0, novos: data.novos ?? 0 }));
+  }, [eu, versao, vistaAtual]);
 
   const ir = (vista, leadId = null) => {
     location.hash = leadId ? `${vista}/${leadId}` : vista;
@@ -168,22 +208,26 @@ export default function App() {
     configuracoes: gestor ? <Configuracoes /> : null,
     site: eu.papel === "gestor" ? <Site /> : null,
     empreendimentos: gestor ? <Empreendimentos /> : null,
+    naoclientes: gestor ? <NaoClientes /> : null,
     disparos: eu.papel === "gestor" ? <Disparos /> : null,
     portais: eu.papel === "gestor" ? <Portais /> : null,
     perfil: <Perfil />,
   };
 
   const itensDoMais = MENU.map(([id]) => id).filter((id) => noMais(id, eu.papel) && podeVer(id, eu.papel));
-  const tituloDaVista = MENU.find(([id]) => id === endereco.vista)[1];
+  // Na tela do Bolsão o destaque some (a própria tela marca como visto).
+  const bolsaoNovo = bolsao.novos > 0 && endereco.vista !== "bolsao";
   const itemDoMenu = (id) => MENU.find(([i]) => i === id);
   const botaoDoMenu = (id, extra = "") => {
     const [, titulo, subtitulo, icone, curto] = itemDoMenu(id);
     return (
-      <button key={id} type="button" className={extra} title={subtitulo} aria-current={endereco.vista === id ? "page" : undefined} onClick={() => ir(id)}>
+      <button key={id} type="button" className={extra} title={recolhido ? `${titulo} · ${subtitulo}` : subtitulo} aria-current={endereco.vista === id ? "page" : undefined} onClick={() => ir(id)}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">{icone}</svg>
         <span className="nome-longo">{titulo}</span>
         <span className="nome-curto">{curto}</span>
-        {id === "leads" && aguardando > 0 ? <span className="contador" aria-label={`${aguardando} aguardando corretor`}>{aguardando}</span> : <span />}
+        {id === "leads" && aguardando > 0 ? <span className="contador" aria-label={`${aguardando} aguardando corretor`}>{aguardando}</span>
+          : id === "bolsao" && bolsao.total > 0 ? <SeloBolsao total={bolsao.total} novo={bolsaoNovo} />
+          : <span />}
       </button>
     );
   };
@@ -192,10 +236,17 @@ export default function App() {
     <>
       <header className={`topo ${contaAberta ? "conta-aberta" : ""}`}>
         <div className="marca">
-          <img src={logoDaEmpresa(empresa)} alt={empresa.nome} />
+          {/* Só a logo: um toque nela volta para o Início. */}
+          <a className="marca-link" href="#inicio" onClick={(e) => { e.preventDefault(); ir("inicio"); }} aria-label={`${empresa.nome}: ir para o Início`}>
+            <img className={empresa.logo_url ? "logo-propria" : ""} src={logoDaEmpresa(empresa, tema === "escuro")} alt="" />
+          </a>
           <h1 className="invisivel">Central de Atendimento da {empresa.nome}</h1>
-          <span className="titulo-movel" aria-hidden="true">{tituloDaVista}</span>
         </div>
+        <button type="button" className="abrir-busca" onClick={() => setBuscaAberta(true)} aria-label="Busca rápida (Ctrl+K)">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-4-4" /></svg>
+          <span className="abrir-busca-texto">Buscar lead, imóvel ou tela</span>
+          <kbd className="abrir-busca-atalho">Ctrl K</kbd>
+        </button>
         <button type="button" className="botao-conta" aria-expanded={contaAberta} aria-controls="menu-conta" aria-label="Minha conta" onClick={() => setContaAberta(!contaAberta)}>
           {eu.foto_url ? <img src={eu.foto_url} alt="" /> : iniciais(eu.nome)}
         </button>
@@ -213,7 +264,14 @@ export default function App() {
         </div>
       </header>
       {(contaAberta || maisAberto) && <div className="veu" onClick={() => { setContaAberta(false); setMaisAberto(false); }} aria-hidden="true" />}
-      <div className="estrutura">
+      <BuscaRapida
+        aberto={buscaAberta}
+        aoFechar={() => setBuscaAberta(false)}
+        telas={MENU.filter(([id]) => podeVer(id, eu.papel))}
+        ir={ir}
+        buscaLeads={podeVer("leads", eu.papel)}
+      />
+      <div className={`estrutura${recolhido ? " menu-recolhido" : ""}`}>
         <nav className="trilho" aria-label="Menu">
           {GRUPOS.map(([grupo, ids]) => {
             const itens = ids.filter((id) => podeVer(id, eu.papel));
@@ -225,11 +283,16 @@ export default function App() {
               </div>
             );
           })}
+          <button type="button" className="recolher-menu so-computador" aria-pressed={recolhido} title={recolhido ? "Mostrar os nomes do menu" : "Recolher o menu"} onClick={() => recolher(!recolhido)}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" />{recolhido ? <path d="m13 10 2 2-2 2" /> : <path d="m16 10-2 2 2 2" />}</svg>
+            <span className="nome-longo">{recolhido ? "Mostrar nomes" : "Recolher menu"}</span>
+            <span />
+          </button>
           {itensDoMais.length > 0 && (
             <button type="button" className="so-celular" aria-expanded={maisAberto} aria-current={noMais(endereco.vista, eu.papel) ? "page" : undefined} onClick={() => { setMaisAberto(!maisAberto); setContaAberta(false); }}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">{ICONE_MAIS}</svg>
               <span className="nome-curto">Mais</span>
-              <span />
+              {itensDoMais.includes("bolsao") && bolsao.total > 0 ? <SeloBolsao total={bolsao.total} novo={bolsaoNovo} /> : <span />}
             </button>
           )}
         </nav>
@@ -242,6 +305,7 @@ export default function App() {
                 <button key={id} type="button" aria-current={endereco.vista === id ? "page" : undefined} onClick={() => ir(id)}>
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">{icone}</svg>
                   <span><b>{titulo}</b><small>{subtitulo}</small></span>
+                  {id === "bolsao" && bolsao.total > 0 && <SeloBolsao total={bolsao.total} novo={bolsaoNovo} />}
                 </button>
               );
             })}
@@ -253,5 +317,14 @@ export default function App() {
         </main>
       </div>
     </>
+  );
+}
+
+// Número de leads no Bolsão; com lead que a pessoa ainda não viu, ganha o ponto verde pulsando.
+function SeloBolsao({ total, novo }) {
+  return (
+    <span className={`contador contador-bolsao${novo ? " novo" : ""}`} aria-label={`${total} no Bolsão${novo ? ", com lead novo" : ""}`}>
+      {novo && <i aria-hidden="true" />}{total}
+    </span>
   );
 }

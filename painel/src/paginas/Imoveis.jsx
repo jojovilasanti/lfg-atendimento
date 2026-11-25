@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Segmento from "../base/Segmento.jsx";
 import { BotaoFechar, Carregando, Erro, haQuanto, nomeTipo, useCarregar, useEhCelular } from "../comum.jsx";
 import {
   areaDoImovel, avaliarImovel, baixarPlanilha, ehMinhaCaptacao, metros, miniDaFoto, NOME_DA_SITUACAO, precoDoImovel, resumoDoImovel, semAcento, SITUACOES, textoParaWhatsapp,
@@ -50,7 +51,22 @@ function ListaDeImoveis({ abrir }) {
   const [escopo, setEscopo] = useState("tudo");
   const [situacao, setSituacao] = useState("disponivel");
   const [ordem, setOrdem] = useState("recentes");
-  const [visao, setVisao] = useState("tabela");
+  // Tabela ou cartões: a escolha fica guardada neste aparelho.
+  const [visao, setVisaoAgora] = useState(() => {
+    try {
+      return localStorage.getItem("lfg-imoveis-visao") === "cartoes" ? "cartoes" : "tabela";
+    } catch {
+      return "tabela";
+    }
+  });
+  const setVisao = (valor) => {
+    setVisaoAgora(valor);
+    try {
+      localStorage.setItem("lfg-imoveis-visao", valor);
+    } catch {
+      // sem armazenamento: vale só nesta visita
+    }
+  };
   const [limite, setLimite] = useState(POR_PAGINA);
   const [selecionados, setSelecionados] = useState(() => new Set());
   const [aviso, setAviso] = useState(null);
@@ -216,8 +232,7 @@ function ListaDeImoveis({ abrir }) {
 
       <div className="filtros">
         <div className="chips">
-          <button type="button" className="filtro" aria-pressed={escopo === "tudo"} onClick={() => setEscopo("tudo")}>Tudo <b>{naSituacao.length}</b></button>
-          <button type="button" className="filtro" aria-pressed={escopo === "minhas"} onClick={() => setEscopo("minhas")}>Minhas captações <b>{minhas.length}</b></button>
+          <Segmento rotulo="Quais imóveis" valor={escopo} aoMudar={setEscopo} opcoes={[{ id: "tudo", rotulo: "Tudo", conta: naSituacao.length }, { id: "minhas", rotulo: "Minhas captações", conta: minhas.length }]} />
         </div>
         {!celular && (
           <>
@@ -235,10 +250,7 @@ function ListaDeImoveis({ abrir }) {
         )}
         <div className="acoes-lista">
           {!celular && (
-            <div className="tema" role="group" aria-label="Forma de ver a lista">
-              <button type="button" aria-pressed={visao === "tabela"} onClick={() => setVisao("tabela")}>Tabela</button>
-              <button type="button" aria-pressed={visao === "cartoes"} onClick={() => setVisao("cartoes")}>Cartões</button>
-            </div>
+            <Segmento pequeno rotulo="Forma de ver a lista" valor={visao} aoMudar={setVisao} opcoes={[{ id: "tabela", rotulo: "Tabela" }, { id: "cartoes", rotulo: "Cartões" }]} />
           )}
           <button type="button" className="botao secundario pequeno" onClick={() => abrir("cliques")}>Cliques no WhatsApp</button>
           <button type="button" className="link-botao pequeno" disabled={!encontrados.length} onClick={() => baixarPlanilha(encontrados)}>Exportar lista ({encontrados.length})</button>
@@ -290,13 +302,17 @@ function ListaDeImoveis({ abrir }) {
               <div key={i.codigo} className="cartao-com-marca com-acao">
                 <label className="marca-cartao"><input type="checkbox" aria-label={`Marcar ${i.referencia}`} checked={selecionados.has(i.codigo)} onChange={(e) => marcar(i.codigo, e.target.checked)} /></label>
                 <a className="cartao-imovel" href={`#imoveis/${i.codigo}`}>
-                  {i.foto_principal ? <img src={i.foto_mini ?? miniDaFoto(i.foto_principal)} alt={`Foto do imóvel ${i.referencia}`} loading="lazy" decoding="async" /> : <span style={{ aspectRatio: "4 / 3", background: "var(--painel-2)" }} />}
-                  <div>
-                    <b>{i.referencia}{i.situacao !== "disponivel" ? ` · ${NOME_DA_SITUACAO[i.situacao]}` : ""}</b>
-                    <strong>{preco.valor}</strong>
-                    <span>{nomeTipo(i.tipo)} · {i.bairro}</span>
-                    <span>{resumoDoImovel(i) || "—"}</span>
-                    <NotaDeQualidade imovel={i} />
+                  <span className="cartao-imovel-foto">
+                    {i.foto_principal ? <img src={i.foto_mini ?? miniDaFoto(i.foto_principal)} alt={`Foto do imóvel ${i.referencia}`} loading="lazy" decoding="async" /> : <span className="cartao-imovel-sem-foto">Sem foto</span>}
+                    {i.situacao !== "disponivel" && <span className="cartao-imovel-selo">{NOME_DA_SITUACAO[i.situacao]}</span>}
+                    {(i.fotos?.length ?? 0) > 1 && <span className="cartao-imovel-qtd">{i.fotos.length} fotos</span>}
+                  </span>
+                  <div className="cartao-imovel-corpo">
+                    <span className="cartao-imovel-bairro">{i.bairro ?? "Sem bairro"}</span>
+                    <span className="cartao-imovel-titulo">{nomeTipo(i.tipo)}{i.dormitorios ? ` com ${i.dormitorios} quarto${i.dormitorios === 1 ? "" : "s"}` : ""}</span>
+                    <strong>{preco.valor}<small>{preco.operacao}</small></strong>
+                    <span className="cartao-imovel-dados">{resumoDoImovel(i) || "—"}</span>
+                    <span className="cartao-imovel-pe"><b>{i.referencia}</b><NotaDeQualidade imovel={i} /></span>
                   </div>
                 </a>
                 {i.ativo !== false && i.situacao === "disponivel" && <BotaoCompartilhar imovel={i} className="botao secundario" />}

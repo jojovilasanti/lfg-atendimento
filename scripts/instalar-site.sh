@@ -18,7 +18,7 @@ rm -rf /root/lfg-implantacao && mkdir -p /root/lfg-implantacao && tar -xzf - -C 
 cd /root/lfg-implantacao
 
 mkdir -p /opt/lfg-site
-cp site/gerar.py site/estilo.css site/site.js site/logo-lfg.png /opt/lfg-site/
+cp site/gerar.py site/estilo.css site/site.js site/logo-lfg.png site/logo-lfg-branca.png /opt/lfg-site/
 
 python3 /opt/lfg-site/gerar.py --saida /var/www/lfg-site --forcar
 printf "%s\n" "* * * * * root python3 /opt/lfg-site/gerar.py --saida /var/www/lfg-site >> /var/log/lfg-site.log 2>&1" > /etc/cron.d/lfg-site

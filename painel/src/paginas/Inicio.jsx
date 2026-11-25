@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Contador from "../base/Contador.jsx";
 import { Carregando, contagem, Erro, EtiquetaPrazo, Interruptor, jaVenceu, OPERACAO, PRAZO_ATENCAO_LEAD, quando, Temperatura, useAgora, useCarregar, venceAteHoje } from "../comum.jsx";
 import { useSessao } from "../sessao.jsx";
 import { exigir, mensagemDeErro, supabase } from "../supabase.js";
@@ -7,6 +8,28 @@ import { ProximoDoRodizio } from "./FilaRodizio.jsx";
 function inicioDoMes() {
   const agora = new Date();
   return new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString();
+}
+
+function mesmoPeriodoDoMesPassado() {
+  const agora = new Date();
+  const inicio = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
+  // Dia 31 num mês de 30 dias vira o último dia do mês passado.
+  const ultimoDia = new Date(agora.getFullYear(), agora.getMonth(), 0).getDate();
+  const fim = new Date(agora.getFullYear(), agora.getMonth() - 1, Math.min(agora.getDate(), ultimoDia), agora.getHours(), agora.getMinutes());
+  return { inicio: inicio.toISOString(), fim: fim.toISOString() };
+}
+
+// "▲ 12% · mesmo período do mês passado (40)". Sem base para comparar, fica o texto simples.
+function Variacao({ agora, antes }) {
+  if (antes == null) return <small>sem contar os testes</small>;
+  if (antes === 0) return <small>{agora > 0 ? "sem leads no mês passado até este dia, para comparar" : "sem contar os testes"}</small>;
+  const pct = Math.round(((agora - antes) / antes) * 100);
+  const classe = pct > 0 ? "sobe" : pct < 0 ? "desce" : "igual";
+  return (
+    <small className="variacao-linha" title={`Mês passado, do dia 1 até hoje: ${antes} leads`}>
+      <span className={`variacao ${classe}`}>{pct > 0 ? "▲" : pct < 0 ? "▼" : "="} {Math.abs(pct)}%</span> vs. mesmo período do mês passado ({antes})
+    </small>
+  );
 }
 
 // 451 s vira "7 min 31 s"; 2 h e pouco vira "2 h 05 min".
@@ -60,6 +83,13 @@ function InicioDaEquipe({ abrirLead, ir }) {
   const mes = new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
   const resumo = useCarregar(async () => exigir(await supabase.rpc("painel_resumo", { p_desde: inicioDoMes() })), [versao]);
+  // Mesmo pedaço do mês passado (do dia 1 até hoje, neste horário), para comparar.
+  const mesPassado = useCarregar(async () => {
+    const { inicio, fim } = mesmoPeriodoDoMesPassado();
+    const resposta = await supabase.from("leads").select("id", { count: "exact", head: true }).gte("criado_em", inicio).lt("criado_em", fim).not("whatsapp", "like", "sim-%");
+    exigir(resposta);
+    return resposta.count ?? 0;
+  }, [versao]);
   const fila = useCarregar(async () => {
     const ofertas = exigir(
       await supabase.from("atribuicoes").select("id, lead_id, corretor_id, prazo_em").eq("status", "pendente").order("prazo_em"),
@@ -131,6 +161,27 @@ function InicioDaEquipe({ abrirLead, ir }) {
         </div>
       )}
 
+      <div className="painel">
+        <h3>
+          Para fazer agora <span className="etiqueta alerta">{paraFazer.length}</span>
+          <button type="button" className="link-botao acao" onClick={() => ir("leads")}>Ver todos os leads</button>
+        </h3>
+        {fila.dados === undefined ? <Carregando /> : paraFazer.length === 0 ? (
+          <div className="vazio"><span className="marcador pronto">✓</span><div><b>Nada pendente</b><p>Quando a IA passar um lead, ele aparece aqui.</p></div></div>
+        ) : (
+          <div className="lista">
+            {paraFazer.map((l) => (
+              <button type="button" key={l.id} className={`tarefa ${l.temperatura === "quente" ? "quente" : ""}`} onClick={() => abrirLead(l.id)}>
+                <div>
+                  <div className="linha1">{l.nome ?? "Cliente sem nome"} <Temperatura valor={l.temperatura} /> {l.interesse && <span className="etiqueta pendente">{OPERACAO[l.interesse]}</span>} {l.whatsapp.startsWith("sim-") && <span className="etiqueta pendente">teste</span>}</div>
+                  <p>{l.resumo ?? "Sem resumo ainda."}</p>
+                </div>
+                <span className="ir">Abrir →</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       {passos.dados?.length > 0 && (
         <div className="painel">
           <h3>
@@ -155,10 +206,10 @@ function InicioDaEquipe({ abrirLead, ir }) {
       {!r ? <Carregando /> : (
         <>
           <div className="indicadores">
-            <div className="indicador"><span className="rotulo">Leads no mês</span><b>{r.leads}</b><small>sem contar os testes</small></div>
-            <div className="indicador alerta"><span className="rotulo">Aguardando corretor</span><b>{r.aguardando}</b><small>passados e ainda sem dono</small></div>
-            <div className="indicador alerta"><span className="rotulo">Prazos vencidos</span><b>{r.prazos_vencidos}</b><small>corretor não assumiu a tempo</small></div>
-            <div className="indicador destaque"><span className="rotulo">Leads quentes</span><b>{r.quentes}</b><small>prontos para avançar</small></div>
+            <div className="indicador"><span className="rotulo">Leads no mês</span><b><Contador valor={r.leads} /></b><Variacao agora={r.leads} antes={mesPassado.dados} /></div>
+            <div className="indicador alerta"><span className="rotulo">Aguardando corretor</span><b><Contador valor={r.aguardando} /></b><small>passados e ainda sem dono</small></div>
+            <div className="indicador alerta"><span className="rotulo">Prazos vencidos</span><b><Contador valor={r.prazos_vencidos} /></b><small>corretor não assumiu a tempo</small></div>
+            <div className="indicador destaque"><span className="rotulo">Leads quentes</span><b><Contador valor={r.quentes} /></b><small>prontos para avançar</small></div>
           </div>
           <div className="grade-3-1">
             <div className="painel">
@@ -166,7 +217,7 @@ function InicioDaEquipe({ abrirLead, ir }) {
               <div className="funil">
                 {funil.map(([titulo, n, descricao], i) => (
                   <div key={titulo} className={`etapa ${i === funil.length - 1 ? "fim" : ""}`}>
-                    <span className="rotulo">{titulo}</span><b>{n}</b><span>{descricao}</span>
+                    <span className="rotulo">{titulo}</span><b><Contador valor={n} /></b><span>{descricao}</span>
                     <span className="faixa"><i style={{ width: `${r.leads ? (n / r.leads) * 100 : 0}%` }} /></span>
                   </div>
                 ))}
@@ -183,27 +234,6 @@ function InicioDaEquipe({ abrirLead, ir }) {
         </>
       )}
 
-      <div className="painel">
-        <h3>
-          Para fazer agora <span className="etiqueta alerta">{paraFazer.length}</span>
-          <button type="button" className="link-botao acao" onClick={() => ir("leads")}>Ver todos os leads</button>
-        </h3>
-        {fila.dados === undefined ? <Carregando /> : paraFazer.length === 0 ? (
-          <div className="vazio"><span className="marcador pronto">✓</span><div><b>Nada pendente</b><p>Quando a IA passar um lead, ele aparece aqui.</p></div></div>
-        ) : (
-          <div className="lista">
-            {paraFazer.map((l) => (
-              <button type="button" key={l.id} className={`tarefa ${l.temperatura === "quente" ? "quente" : ""}`} onClick={() => abrirLead(l.id)}>
-                <div>
-                  <div className="linha1">{l.nome ?? "Cliente sem nome"} <Temperatura valor={l.temperatura} /> {l.interesse && <span className="etiqueta pendente">{OPERACAO[l.interesse]}</span>} {l.whatsapp.startsWith("sim-") && <span className="etiqueta pendente">teste</span>}</div>
-                  <p>{l.resumo ?? "Sem resumo ainda."}</p>
-                </div>
-                <span className="ir">Abrir →</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
     </section>
   );
 }

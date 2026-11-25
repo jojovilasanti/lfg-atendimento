@@ -27,6 +27,8 @@ export type Lead = {
   corretor_id: string | null;
   ia_ativa: boolean;
   campanha_ia_id?: string | null;
+  // Triagem: cliente, empresa (vende produto/serviço) ou outros. Vazio = não classificado.
+  categoria?: string | null;
 };
 
 export type Mensagem = {

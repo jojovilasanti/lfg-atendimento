@@ -80,6 +80,23 @@ export const FERRAMENTAS: Anthropic.Beta.BetaTool[] = [
     },
   },
   {
+    name: "classificar_contato",
+    description:
+      "Triagem: diz se o contato é cliente da imobiliária ou não. Chame assim que tiver certeza, e sempre antes de passar_para_corretor. " +
+      "cliente = quer comprar, alugar, vender ou anunciar imóvel (ou é cliente que já aluga/comprou com a LFG). " +
+      "empresa = empresa ou prestador oferecendo produto ou serviço (marketing, sistemas, fotografia, material de construção, consórcio, crédito...). " +
+      "outros = vaga de emprego, corretor de outra imobiliária propondo parceria, engano ou spam. " +
+      "Empresa e outros saem do atendimento e vão para a lista Não clientes, sem corretor.",
+    input_schema: {
+      type: "object",
+      properties: {
+        categoria: { type: "string", enum: ["cliente", "empresa", "outros"] },
+        motivo: { type: "string", description: "Em poucas palavras, o que a pessoa quer (ex.: 'agência oferecendo tráfego pago'). Em português." },
+      },
+      required: ["categoria"],
+    },
+  },
+  {
     name: "passar_para_corretor",
     description:
       "Passa o atendimento para um corretor da LFG. Se o cliente tem um imóvel de interesse, o lead vai ao captador desse imóvel; sem imóvel, ao corretor de plantão do rodízio. " +
@@ -164,8 +181,25 @@ export async function executarFerramenta(nome: string, entrada: Entrada, lead: L
       return { ok: true, ficha: atualizado.ficha, interesse: atualizado.interesse, temperatura: atualizado.temperatura };
     }
 
+    case "classificar_contato": {
+      const categoria = texto(entrada.categoria) ?? "";
+      const resultado = exigir(
+        await banco.rpc("ia_classificar_contato", { p_lead_id: lead.id, p_categoria: categoria, p_motivo: texto(entrada.motivo) }),
+        "classificar contato",
+      ) as Record<string, unknown>;
+      lead.categoria = (resultado.categoria as string) ?? lead.categoria;
+      return resultado.lista === "nao_clientes"
+        ? { ...resultado, proximo_passo: "Responda numa mensagem curta e educada que vai repassar ao setor responsável. Não faça mais perguntas nem passe ao corretor." }
+        : resultado;
+    }
+
     case "passar_para_corretor": {
       const motivo = texto(entrada.motivo) ?? "outro";
+      // Quem chega ao corretor sem triagem é tratado como cliente.
+      if (!lead.categoria) {
+        await banco.rpc("ia_classificar_contato", { p_lead_id: lead.id, p_categoria: "cliente", p_motivo: null });
+        lead.categoria = "cliente";
+      }
       const resumo = texto(entrada.resumo);
       if (resumo) {
         exigir(await banco.rpc("ia_atualizar_lead", { p_lead_id: lead.id, p_resumo: resumo }), "salvar resumo");

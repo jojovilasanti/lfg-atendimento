@@ -107,7 +107,7 @@ const SITUACAO = {
   encerrado: ["Encerrado", "pendente"],
 };
 export const TIPOS = ["CASA", "APARTAMENTO", "TERRENO", "CHACARA", "COMERCIAL", "BARRACAO", "GALPAO"];
-const NOMES_DOS_TIPOS = { CHACARA: "Chácara", BARRACAO: "Barracão", GALPAO: "Galpão" };
+const NOMES_DOS_TIPOS = { CHACARA: "Chácara", BARRACAO: "Barracão", GALPAO: "Galpão", SALAO: "Salão", "TWO STORY HOUSE": "Sobrado", PONTO: "Ponto comercial", AREA: "Área" };
 export const nomeTipo = (t) => (t ? NOMES_DOS_TIPOS[t] ?? t.charAt(0) + t.slice(1).toLowerCase() : "");
 export const OPERACAO = { compra: "Compra", locacao: "Aluguel", administrativo: "Administrativo", outro: "Outro" };
 
@@ -158,8 +158,14 @@ export function useFecharAoTocarFora(ref, aberto, aoFechar) {
   }, [aberto, ref]);
 }
 
-export function Carregando({ texto = "Carregando…" }) {
-  return <p className="carregando">{texto}</p>;
+// Enquanto carrega: o desenho da tela em cinza (esqueleto), e o texto só para o leitor de tela.
+export function Carregando({ texto = "Carregando…", linhas = 3 }) {
+  return (
+    <div className="esqueleto" role="status">
+      <span className="invisivel">{texto}</span>
+      {Array.from({ length: linhas }, (_, i) => <i key={i} style={{ width: `${[92, 76, 84, 60][i % 4]}%` }} />)}
+    </div>
+  );
 }
 
 export function Erro({ mensagem }) {

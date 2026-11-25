@@ -4,14 +4,103 @@
   const POR_PAGINA = 24;
 
   // Página inicial: "Comprar" e "Alugar" mudam para onde a busca leva.
+  document.documentElement.classList.add("js");
+  const semMovimento = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  // Menu do celular: abre por cima da página e fecha com Esc, toque num link ou fora.
+  const topo = document.querySelector("[data-topo]");
+  const botaoMenu = document.querySelector("[data-menu]");
+  if (topo && botaoMenu) {
+    // O menu aberto tem fundo escuro: a logo colorida dá lugar à branca.
+    const logo = topo.querySelector("[data-logo-branca]");
+    const logoOriginal = logo?.getAttribute("src");
+    const trocarLogo = () => {
+      if (!logo) return;
+      const escuro = topo.classList.contains("menu-aberto") || topo.classList.contains("sobre-capa");
+      logo.src = escuro ? logo.dataset.logoBranca : logoOriginal;
+    };
+    const abrir = (aberto) => {
+      topo.classList.toggle("menu-aberto", aberto);
+      trocarLogo();
+      document.body.classList.toggle("sem-rolagem", aberto);
+      botaoMenu.setAttribute("aria-expanded", String(aberto));
+      botaoMenu.querySelector(".invisivel").textContent = aberto ? "Fechar o menu" : "Abrir o menu";
+    };
+    botaoMenu.addEventListener("click", () => abrir(!topo.classList.contains("menu-aberto")));
+    topo.querySelector(".menu-principal")?.addEventListener("click", (evento) => {
+      if (evento.target.closest("a")) abrir(false);
+    });
+    document.addEventListener("keydown", (evento) => {
+      if (evento.key === "Escape" && topo.classList.contains("menu-aberto")) {
+        abrir(false);
+        botaoMenu.focus();
+      }
+    });
+    matchMedia("(min-width: 901px)").addEventListener?.("change", (m) => m.matches && abrir(false));
+  }
+
+  // Topo da página inicial: fica transparente sobre a foto e ganha fundo ao rolar.
+  if (topo?.classList.contains("sobre-capa")) {
+    const marcar = () => topo.classList.toggle("rolou", scrollY > 40);
+    addEventListener("scroll", marcar, { passive: true });
+    marcar();
+  }
+
+  // Título da capa surgindo palavra por palavra.
+  const revelar = document.querySelector("[data-revelar]");
+  if (revelar && !semMovimento) {
+    const palavras = revelar.textContent.trim().split(/\s+/);
+    revelar.textContent = "";
+    palavras.forEach((palavra, n) => {
+      const span = document.createElement("span");
+      span.className = "palavra";
+      span.style.animationDelay = `${120 + n * 80}ms`;
+      span.textContent = palavra;
+      revelar.append(span, n < palavras.length - 1 ? " " : "");
+    });
+  }
+
+  // Blocos que sobem ao aparecer na tela e números que contam até o valor.
+  const contar = (el) => {
+    const alvo = Number(el.dataset.contar) || 0;
+    if (semMovimento || alvo < 2) return;
+    const inicio = performance.now();
+    const passo = (agora) => {
+      const p = Math.min((agora - inicio) / 1200, 1);
+      el.textContent = Math.round(alvo * (1 - Math.pow(1 - p, 3)));
+      if (p < 1) requestAnimationFrame(passo);
+    };
+    el.textContent = "0";
+    requestAnimationFrame(passo);
+  };
+  if ("IntersectionObserver" in window) {
+    const observador = new IntersectionObserver((itens) => {
+      for (const item of itens) {
+        if (!item.isIntersecting) continue;
+        observador.unobserve(item.target);
+        if (item.target.dataset.contar) contar(item.target);
+        else item.target.classList.add("visivel");
+      }
+    }, { threshold: 0.12, rootMargin: "0px 0px -40px 0px" });
+    document.querySelectorAll(".grade-imoveis .sobe").forEach((el, n) => (el.style.transitionDelay = `${(n % 3) * 90}ms`));
+    document.querySelectorAll(".sobe, [data-contar]").forEach((el) => observador.observe(el));
+  } else {
+    document.querySelectorAll(".sobe").forEach((el) => el.classList.add("visivel"));
+  }
+
   const busca = document.querySelector("[data-busca]");
   if (busca) {
+    const valores = busca.dataset.valores ? JSON.parse(busca.dataset.valores) : null;
     busca.addEventListener("change", (evento) => {
-      if (evento.target.name === "finalidade") busca.action = evento.target.value;
+      if (evento.target.name !== "finalidade") return;
+      busca.action = evento.target.value;
+      // Valores de compra e de aluguel são bem diferentes: troca a lista do "Até".
+      const tipoValor = evento.target.dataset.tipoValor;
+      if (valores && busca.elements.valor && valores[tipoValor]) busca.elements.valor.innerHTML = valores[tipoValor];
     });
     busca.addEventListener("submit", () => {
       for (const campo of busca.querySelectorAll("[name=finalidade]")) campo.disabled = true;
-      for (const campo of [busca.elements.tipo, busca.elements.bairro]) if (!campo.value) campo.disabled = true;
+      for (const campo of [busca.elements.tipo, busca.elements.bairro, busca.elements.valor]) if (campo && !campo.value) campo.disabled = true;
       setTimeout(() => {
         for (const campo of busca.querySelectorAll("[disabled]")) campo.disabled = false;
       });
@@ -60,6 +149,18 @@
         galeria.scrollBy({ left: Number(seta.dataset.seta) * (foto.clientWidth + 8), behavior: "smooth" });
       });
     }
+  }
+
+  // Descrição longa começa recolhida; o botão abre e fecha.
+  const descricao = document.querySelector("[data-descricao]");
+  const lerMais = document.querySelector("[data-ler-mais]");
+  if (descricao && lerMais) {
+    lerMais.hidden = false;
+    lerMais.addEventListener("click", () => {
+      const aberta = descricao.classList.toggle("fechada") === false;
+      lerMais.setAttribute("aria-expanded", String(aberta));
+      lerMais.textContent = aberta ? "Mostrar menos" : "Ler a descrição completa";
+    });
   }
 
   // Foto em tela cheia: abre por cima da página, inteira, com setas, teclado e deslizar.
@@ -390,13 +491,42 @@
   const contagem = lista.querySelector("[data-contagem]");
   const vazio = lista.querySelector("[data-vazio]");
   const mais = lista.querySelector("[data-mais]");
+  const grade = lista.querySelector("[data-grade]");
+  const ordenar = lista.querySelector("[data-ordenar]");
+  const abrirFiltros = lista.querySelector("[data-abrir-filtros]");
+  const quantosFiltros = lista.querySelector("[data-quantos-filtros]");
   let limite = POR_PAGINA;
+
+  // Ordem: mais recentes (a do banco), menor ou maior valor. "Consulte" vai para o fim.
+  function reordenar() {
+    const modo = ordenar?.value || "recentes";
+    const valor = (c) => Number(c.dataset.valor) || (modo === "maior" ? -1 : Infinity);
+    const ordem = [...cartoes].sort((a, b) =>
+      modo === "menor" ? valor(a) - valor(b) : modo === "maior" ? valor(b) - valor(a) : Number(a.dataset.ordem) - Number(b.dataset.ordem));
+    grade.append(...ordem);
+    cartoes.splice(0, cartoes.length, ...ordem);
+  }
+
+  // No celular os filtros ficam recolhidos atrás de um botão, para os imóveis aparecerem logo.
+  if (abrirFiltros) {
+    abrirFiltros.hidden = false;
+    abrirFiltros.addEventListener("click", () => {
+      const aberto = filtros.classList.toggle("aberto");
+      abrirFiltros.setAttribute("aria-expanded", String(aberto));
+    });
+  }
+  const marcarFiltros = () => {
+    if (!quantosFiltros) return;
+    const n = ["tipo", "bairro", "valor", "quartos"].filter((nome) => filtros.elements[nome].value).length;
+    quantosFiltros.textContent = n ? ` (${n})` : "";
+  };
 
   const parametros = new URLSearchParams(location.search);
   for (const nome of ["tipo", "bairro", "valor", "quartos"]) {
     const valor = parametros.get(nome);
     if (valor && filtros.elements[nome]) filtros.elements[nome].value = valor;
   }
+  if (ordenar && parametros.get("ordem")) ordenar.value = parametros.get("ordem");
 
   function aplicar() {
     const tipo = filtros.elements.tipo.value;
@@ -424,12 +554,20 @@
     for (const nome of ["tipo", "bairro", "valor", "quartos"]) {
       if (filtros.elements[nome].value) novos.set(nome, filtros.elements[nome].value);
     }
+    if (ordenar && ordenar.value !== "recentes") novos.set("ordem", ordenar.value);
     const texto = novos.toString();
     history.replaceState(null, "", texto ? `?${texto}` : location.pathname);
   }
 
   filtros.addEventListener("input", () => {
     limite = POR_PAGINA;
+    aplicar();
+    marcarFiltros();
+    guardarNoEndereco();
+  });
+  ordenar?.addEventListener("change", () => {
+    limite = POR_PAGINA;
+    reordenar();
     aplicar();
     guardarNoEndereco();
   });
@@ -438,5 +576,7 @@
     limite += POR_PAGINA;
     aplicar();
   });
+  reordenar();
   aplicar();
+  marcarFiltros();
 })();

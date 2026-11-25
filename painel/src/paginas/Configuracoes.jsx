@@ -9,15 +9,22 @@ import { GradeDaAgenda } from "./Agenda.jsx";
 import CampanhasDaThais from "./CampanhasDaThais.jsx";
 import Perfil, { iniciais } from "./Perfil.jsx";
 
+// [id, nome, descrição curta, grupo]
 const ABAS = [
-  ["geral", "Configurações gerais"],
-  ["regras", "Regras do plantão"],
-  ["agenda", "Agenda de visitas"],
-  ["campanhas", "Campanhas da Thais"],
-  ["equipe", "Equipe e acessos"],
-  ["integracoes", "Integrações"],
-  ["conta", "Minha conta"],
+  ["geral", "Configurações gerais", "Empresa, horário, marca d’água e chave da API", "Empresa"],
+  ["conta", "Minha conta", "Seus dados, Google Agenda, sua página e senha", "Empresa"],
+  ["regras", "Regras do plantão", "Rodízio, horários e follow-up", "Atendimento"],
+  ["agenda", "Agenda de visitas", "Grade de horários das visitas", "Atendimento"],
+  ["campanhas", "Campanhas da Thais", "O que a IA sabe de cada campanha", "Atendimento"],
+  ["equipe", "Equipe e acessos", "Quem entra no painel e o perfil", "Equipe"],
+  ["integracoes", "Integrações", "WhatsApp, IA, Univen e o que está ligado", "Equipe"],
 ];
+const GRUPOS_DAS_ABAS = ["Empresa", "Atendimento", "Equipe"];
+// A aba fica no endereço (#configuracoes/regras) para dar para mandar o link direto.
+const abaDoEndereco = () => {
+  const [vista, aba] = location.hash.slice(1).split("/");
+  return vista === "configuracoes" && ABAS.some(([id]) => id === aba) ? aba : null;
+};
 
 // Campos que a IA sabe conferir antes de passar o lead (ver agente.ts).
 const PERGUNTAS = [
@@ -31,29 +38,60 @@ const PERGUNTAS = [
 ];
 
 export default function Configuracoes() {
-  const { souGestor } = useSessao();
   // Volta do Google Agenda (?google=...): abre direto em Minha conta, onde fica a conexão.
-  const [aba, setAba] = useState(() => (new URLSearchParams(location.search).get("google") ? "conta" : "geral"));
+  const [aba, setAbaAgora] = useState(() => (new URLSearchParams(location.search).get("google") ? "conta" : abaDoEndereco() ?? "geral"));
+  const setAba = (id) => {
+    setAbaAgora(id);
+    history.replaceState(null, "", `#configuracoes/${id}`);
+  };
+  useEffect(() => {
+    const aoMudar = () => {
+      const doEndereco = abaDoEndereco();
+      if (doEndereco) setAbaAgora(doEndereco);
+    };
+    window.addEventListener("hashchange", aoMudar);
+    return () => window.removeEventListener("hashchange", aoMudar);
+  }, []);
+  // No celular o menu vira uma faixa que rola de lado: a parte aberta fica à vista.
+  useEffect(() => {
+    const menu = document.querySelector(".config-menu");
+    const botao = menu?.querySelector("[aria-current='page']");
+    if (!botao || !window.matchMedia?.("(max-width: 900px)").matches) return;
+    // Rola só a faixa, de lado; a página fica onde está.
+    menu.scrollTo({ left: botao.offsetLeft - 12, behavior: "smooth" });
+  }, [aba]);
   return (
-    <section className="vista" aria-labelledby="t-config">
+    <section className="vista vista-config" aria-labelledby="t-config">
       <div className="cabeca-vista">
         <div>
           <h2 id="t-config">Configurações</h2>
           <p>Dados da empresa, regras do plantão, quem tem acesso ao painel e o que já está ligado.</p>
         </div>
       </div>
-      <div className="abas" role="tablist">
-        {ABAS.filter(([, , quem]) => !quem || souGestor).map(([id, texto]) => (
-          <button key={id} type="button" role="tab" className="aba" aria-selected={aba === id} onClick={() => setAba(id)}>{texto}</button>
-        ))}
+      <div className="config-estrutura">
+        <nav className="config-menu" aria-label="Partes das configurações">
+          {GRUPOS_DAS_ABAS.map((grupo) => (
+            <div key={grupo} className="config-grupo" role="group" aria-label={grupo}>
+              <span className="config-grupo-titulo" aria-hidden="true">{grupo}</span>
+              {ABAS.filter(([, , , g]) => g === grupo).map(([id, nome, descricao]) => (
+                <button key={id} type="button" aria-current={aba === id ? "page" : undefined} onClick={() => setAba(id)}>
+                  <b>{nome}</b>
+                  <small>{descricao}</small>
+                </button>
+              ))}
+            </div>
+          ))}
+        </nav>
+        <div className="config-conteudo">
+          {aba === "geral" && <ConfigGerais />}
+          {aba === "regras" && <div className="formulario"><Regras /><HorariosDistribuicao /><FollowupThais /><FollowupComCorretor /><RegrasRodizio /></div>}
+          {aba === "agenda" && <GradeDaAgenda />}
+          {aba === "campanhas" && <CampanhasDaThais />}
+          {aba === "equipe" && <Equipe />}
+          {aba === "integracoes" && <Integracoes />}
+          {aba === "conta" && <Perfil embutido />}
+        </div>
       </div>
-      {aba === "geral" && <ConfigGerais />}
-      {aba === "regras" && <div className="formulario"><Regras /><HorariosDistribuicao /><FollowupThais /><RegrasRodizio /></div>}
-      {aba === "agenda" && <GradeDaAgenda />}
-      {aba === "campanhas" && <CampanhasDaThais />}
-      {aba === "equipe" && <Equipe />}
-      {aba === "integracoes" && <Integracoes />}
-      {aba === "conta" && <Perfil embutido />}
     </section>
   );
 }
@@ -210,6 +248,74 @@ function FollowupThais() {
       <Erro mensagem={erroSalvar} />
       {salvo && <p className="aviso-ok" role="status">{salvo}</p>}
       {souGestorPleno && <button className="botao" type="submit" disabled={ocupado} style={{ alignSelf: "flex-start" }}>{ocupado ? "Salvando…" : "Salvar follow-up"}</button>}
+    </form>
+  );
+}
+
+// Leads com corretor: aviso ao corretor e follow-up da Thais quando a conversa
+// para (só no horário comercial). Só o gestor muda.
+function FollowupComCorretor() {
+  const { souGestorPleno, versao, recarregar } = useSessao();
+  const { dados, erro } = useCarregar(async () => {
+    const linha = exigir(await supabase.from("configuracoes").select("valor").eq("chave", "followup_corretor").maybeSingle());
+    return { ativo: false, alerta_horas: 20, followup_horas: 24, maximo: 3, ...(linha?.valor ?? {}) };
+  }, [versao]);
+  const [campos, setCampos] = useState(null);
+  const [salvo, setSalvo] = useState(null);
+  const [erroSalvar, setErroSalvar] = useState(null);
+  const [ocupado, setOcupado] = useState(false);
+  useEffect(() => {
+    if (dados) setCampos(dados);
+  }, [dados]);
+
+  async function salvar(evento) {
+    evento.preventDefault();
+    setSalvo(null);
+    setErroSalvar(null);
+    setOcupado(true);
+    try {
+      exigir(await supabase.rpc("salvar_followup_corretor", {
+        p_ativo: campos.ativo, p_alerta_horas: Number(campos.alerta_horas), p_followup_horas: Number(campos.followup_horas), p_maximo: Number(campos.maximo),
+      }));
+      setSalvo(campos.ativo ? "Acompanhamento ligado." : "Acompanhamento desligado: nenhum aviso nem follow-up sai.");
+      recarregar();
+    } catch (e) {
+      setErroSalvar(mensagemDeErro(e));
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  if (!campos) return <><Erro mensagem={erro} /><Carregando /></>;
+  const travado = !souGestorPleno;
+  const mudar = (campo) => (e) => setCampos({ ...campos, [campo]: e.target.value });
+  return (
+    <form className="painel formulario" onSubmit={salvar}>
+      <h3 style={{ margin: 0 }}>Leads com corretor: conversa parada {travado && <span className="etiqueta pendente">só o gestor altera</span>}</h3>
+      <p className="mudo" style={{ margin: 0 }}>
+        Quando um lead com corretor fica sem mensagem nossa, o corretor é avisado e, se continuar parado, a Thais retoma o contato lendo a conversa. Ela não promete nada novo e a IA segue pausada: se o cliente responder, quem continua é o corretor. Os prazos contam desde a última mensagem nossa e o follow-up só sai no horário comercial.
+      </p>
+      <label className="linha-marcar">
+        <input type="checkbox" checked={!!campos.ativo} disabled={travado} onChange={(e) => setCampos({ ...campos, ativo: e.target.checked })} />
+        Acompanhamento ligado
+      </label>
+      <div className="grade-prazos">
+        <label className="campo">Avisar o corretor depois de (horas)
+          <input type="number" min={1} max={71} step={1} required disabled={travado} value={campos.alerta_horas} onChange={mudar("alerta_horas")} />
+        </label>
+        <label className="campo">Follow-up da Thais depois de (horas)
+          <input type="number" min={2} max={72} step={1} required disabled={travado} value={campos.followup_horas} onChange={mudar("followup_horas")} />
+        </label>
+        <label className="campo">Follow-ups seguidos, no máximo
+          <input type="number" min={1} max={10} step={1} required disabled={travado} value={campos.maximo} onChange={mudar("maximo")} />
+        </label>
+      </div>
+      <p className="mudo pequeno" style={{ margin: 0 }}>
+        Se o cliente falou nas últimas 23 horas, a Thais escreve a mensagem a partir da conversa. Se não, o WhatsApp só aceita a mensagem-modelo aprovada pela Meta. Depois do último follow-up sem resposta, o gestor é avisado.
+      </p>
+      <Erro mensagem={erroSalvar} />
+      {salvo && <p className="aviso-ok" role="status">{salvo}</p>}
+      {souGestorPleno && <button className="botao" type="submit" disabled={ocupado} style={{ alignSelf: "flex-start" }}>{ocupado ? "Salvando…" : "Salvar acompanhamento"}</button>}
     </form>
   );
 }
