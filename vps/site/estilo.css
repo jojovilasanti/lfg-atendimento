@@ -580,3 +580,65 @@ a.numero-item:hover b { color: var(--limao); }
   .chamada-bloco { padding: 26px; }
   .secao-cabeca:has(.secao-sub) { flex-direction: column; align-items: flex-start; }
 }
+
+/* ---------- Onde estamos (rodapé) e botões flutuantes ---------- */
+.rodape.onde-estamos { padding: 0; background: var(--marinho); color: #fff; }
+.onde-grade { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 40px; align-items: center; padding-block: 48px; }
+.onde-grade.sem-mapa { grid-template-columns: minmax(0, 1fr); }
+.onde-mapa { overflow: hidden; min-height: 340px; border-radius: var(--raio-g); background: var(--marinho-fundo); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.25); }
+.onde-mapa iframe { display: block; width: 100%; height: 100%; min-height: 340px; border: 0; }
+.onde-info { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.onde-info h2 { color: #fff; font-size: clamp(28px, 3.4vw, 40px); font-weight: 700; }
+.onde-estamos .onde-lista { display: flex; flex-direction: column; gap: 14px; margin: 0; padding: 0; list-style: none; }
+.onde-lista li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 12px; align-items: start; font-size: 17px; font-weight: 600; line-height: 1.45; }
+.onde-lista .icone { width: 22px; height: 22px; margin-top: 2px; color: var(--limao); }
+.onde-lista a { color: #fff; text-decoration-color: rgba(255, 255, 255, 0.4); text-underline-offset: 3px; }
+.onde-lista a:hover { color: var(--limao); }
+.onde-telefones { display: flex; flex-direction: column; gap: 4px; }
+.onde-telefones small { margin-left: 6px; padding: 1px 8px; border-radius: var(--raio-pilula); background: rgba(148, 191, 11, 0.18); color: var(--limao); font-size: 12px; font-weight: 800; vertical-align: 2px; }
+.onde-botoes { display: flex; flex-wrap: wrap; gap: 10px; }
+.onde-botoes .botao .icone { width: 18px; height: 18px; margin-right: 8px; }
+.onde-redes { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 17px; font-weight: 700; }
+.onde-redes a { display: grid; place-items: center; width: 44px; height: 44px; border: 2px solid rgba(255, 255, 255, 0.85); border-radius: 50%; color: #fff; transition: background var(--rapido), color var(--rapido), border-color var(--rapido); }
+.onde-redes a:hover { background: var(--limao); border-color: var(--limao); color: var(--limao-tinta); }
+.onde-redes svg { width: 22px; height: 22px; }
+.onde-estamos .rodape-texto { margin: 0; color: rgba(255, 255, 255, 0.75); font-size: 14px; }
+.onde-base { padding: 16px 0; background: var(--marinho-fundo); color: rgba(255, 255, 255, 0.82); font-size: 14px; font-weight: 600; text-align: center; }
+
+/* WhatsApp redondo no canto */
+.zap-flutuante { position: fixed; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); z-index: 15; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 50%; background: #25D366; color: #fff; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28); text-decoration: none; transition: transform var(--medio) var(--curva); }
+.zap-flutuante:hover { transform: scale(1.06); }
+.zap-flutuante:focus-visible { outline: 3px solid var(--limao); outline-offset: 3px; }
+.zap-flutuante .icone { width: 34px; height: 34px; }
+.zap-balao { position: absolute; right: calc(100% + 12px); top: 50%; padding: 8px 14px; border-radius: var(--raio-pilula); background: #fff; color: var(--texto); box-shadow: var(--sombra-2); font-size: 14px; font-weight: 800; white-space: nowrap; opacity: 0; transform: translate(6px, -50%); pointer-events: none; transition: opacity var(--rapido), transform var(--medio) var(--curva); }
+.zap-flutuante:hover .zap-balao, .zap-flutuante:focus-visible .zap-balao { opacity: 1; transform: translate(0, -50%); }
+@media (prefers-reduced-motion: no-preference) {
+  .zap-flutuante::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 50%; background: #25D366; animation: zap-pulso 2.4s ease-out infinite; }
+  @keyframes zap-pulso { 0% { transform: scale(1); opacity: 0.55; } 80%, 100% { transform: scale(1.6); opacity: 0; } }
+}
+
+/* Redes na lateral direita (só no computador) */
+.redes-flutuantes { position: fixed; right: 0; top: 50%; z-index: 15; display: flex; flex-direction: column; gap: 6px; padding: 6px; transform: translateY(-50%); }
+.redes-flutuantes a { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--cor-rede); color: #fff; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2); transition: transform var(--rapido); }
+.redes-flutuantes a:hover { transform: translateX(-4px) scale(1.05); }
+.redes-flutuantes a:focus-visible { outline: 3px solid var(--limao); outline-offset: 2px; }
+.redes-flutuantes svg { width: 22px; height: 22px; }
+
+/* Menu do celular aberto fica por cima dos botões */
+body.sem-rolagem .zap-flutuante, body.sem-rolagem .redes-flutuantes { display: none; }
+
+@media (max-width: 900px) {
+  .onde-grade { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-block: 32px; }
+  .onde-mapa, .onde-mapa iframe { min-height: 260px; }
+  .redes-flutuantes { display: none; }
+}
+@media (max-width: 640px) {
+  .onde-lista li { font-size: 16px; }
+  .onde-botoes .botao { flex: 1 1 auto; }
+  .onde-base { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+  .zap-flutuante { right: 16px; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); width: 58px; height: 58px; }
+  .zap-balao { display: none; }
+  /* Páginas com a barra de baixo (imóvel, empreendimento): ela já tem o WhatsApp. */
+  .zap-flutuante.com-barra { display: none; }
+  body:has(.barra-movel) .onde-base { padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+}

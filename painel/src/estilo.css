@@ -1558,3 +1558,7 @@ button.botao-fechar, .folha-mais button.botao-fechar {
   .config-menu button { flex: none; padding: 8px 12px; border-radius: var(--raio-pilula); white-space: nowrap; }
   .config-menu button[aria-current="page"] { box-shadow: none; }
 }
+
+/* Tela Site: cada rede com o liga/desliga ao lado do link */
+.linha-rede { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: end; }
+.linha-rede .interruptor { margin-bottom: 10px; }

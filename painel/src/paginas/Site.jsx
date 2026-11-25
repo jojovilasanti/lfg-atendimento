@@ -39,8 +39,19 @@ function camposDoSite(valor) {
     servicos: (valor.servicos ?? []).join("\n"),
     telefones: (valor.telefones ?? []).join("\n"),
     destaques: (valor.destaques ?? []).join(", "),
+    redes_ligadas: { ...(valor.redes_ligadas ?? {}) },
+    flutuantes: { whatsapp: valor.flutuantes?.whatsapp !== false, redes: valor.flutuantes?.redes !== false },
+    mostrar_mapa: valor.mostrar_mapa !== false,
   };
 }
+
+// Redes do rodapé "Onde estamos" e da coluna flutuante: [campo, nome, exemplo].
+const REDES = [
+  ["facebook", "Facebook", "https://facebook.com/..."],
+  ["instagram", "Instagram", "https://instagram.com/..."],
+  ["youtube", "YouTube", "https://youtube.com/@..."],
+  ["tiktok", "TikTok", "https://tiktok.com/@..."],
+];
 
 // E o formulário volta ao formato que o gerador lê.
 function siteDosCampos(campos) {
@@ -235,7 +246,7 @@ export default function Site() {
       const valor = siteDosCampos(campos);
       if (!valor.nome?.trim()) throw new Error("Preencha o nome da imobiliária (em Dados e contatos).");
       if (!valor.titulo?.trim()) throw new Error("Preencha o título do banner.");
-      for (const [nome, endereco] of [["Instagram", valor.instagram], ["Facebook", valor.facebook], ["Endereço do site", valor.endereco_site]]) {
+      for (const [nome, endereco] of [...REDES.map(([id, rede]) => [rede, valor[id]]), ["Endereço do site", valor.endereco_site]]) {
         if (endereco && !endereco.startsWith("https://")) throw new Error(`${nome} precisa começar com https://`);
       }
       if (!/^55\d{10,11}$/.test(valor.whatsapp)) throw new Error("Informe o WhatsApp com 55 e DDD, por exemplo 5567998206049 (em Dados e contatos).");
@@ -411,13 +422,50 @@ export default function Site() {
                 <label className="campo">CRECI<input id="site-creci" value={campos.creci ?? ""} onChange={mudar("creci")} /></label>
                 <label className="campo">WhatsApp do atendimento<input id="site-whatsapp" inputMode="tel" value={campos.whatsapp ?? ""} onChange={mudar("whatsapp")} /></label>
                 <label className="campo">E-mail<input id="site-email" type="email" value={campos.email ?? ""} onChange={mudar("email")} /></label>
-                <label className="campo">Instagram (link)<input id="site-instagram" type="url" placeholder="https://instagram.com/..." value={campos.instagram ?? ""} onChange={mudar("instagram")} /></label>
-                <label className="campo">Facebook (link)<input id="site-facebook" type="url" placeholder="https://facebook.com/..." value={campos.facebook ?? ""} onChange={mudar("facebook")} /></label>
+                <label className="campo">CNPJ<input id="site-cnpj" inputMode="numeric" placeholder="00.000.000/0000-00" value={campos.cnpj ?? ""} onChange={mudar("cnpj")} /></label>
               </div>
-              <label className="campo">Telefones (um por linha)<textarea id="site-telefones" rows={2} value={campos.telefones} onChange={mudar("telefones")} /></label>
-              <label className="campo">Endereço do escritório<input id="site-escritorio" value={campos.endereco ?? ""} onChange={mudar("endereco")} /></label>
+              <label className="campo">Telefones (um por linha)<textarea id="site-telefones" rows={2} value={campos.telefones} onChange={mudar("telefones")} /><span className="mudo pequeno">Celular (com 9 depois do DDD) abre o WhatsApp no site; fixo abre a ligação.</span></label>
+              <label className="campo">Endereço do escritório<input id="site-escritorio" value={campos.endereco ?? ""} onChange={mudar("endereco")} /><span className="mudo pequeno">O mapa e o botão "Como chegar" do rodapé saem deste endereço. Coloque rua, número, bairro, cidade e CEP.</span></label>
               <label className="campo">Horário<input id="site-horario" value={campos.horario ?? ""} onChange={mudar("horario")} /></label>
+              <div className="linha-interruptor">
+                <Interruptor ligado={campos.mostrar_mapa} aoMudar={definir("mostrar_mapa")} rotulo="Mostrar o mapa no rodapé" />
+                <div>
+                  <b className="pequeno">Mapa no rodapé "Onde estamos"</b>
+                  <p className="mudo pequeno" style={{ margin: 0 }}>Mapa do Google com o pino no endereço do escritório.</p>
+                </div>
+              </div>
               <p className="mudo pequeno" style={{ margin: 0 }}>Os botões do site abrem uma conversa neste WhatsApp com a referência do imóvel, e a Thais atende.</p>
+            </div>
+          )}
+
+          {aba === "contatos" && (
+            <div className="painel formulario">
+              <h3 style={{ margin: 0 }}>Redes sociais</h3>
+              <p className="mudo pequeno" style={{ margin: 0 }}>Aparecem no rodapé e na coluna da lateral do site. Rede sem link ou desligada não aparece.</p>
+              {REDES.map(([id, nome, exemplo]) => (
+                <div key={id} className="linha-rede">
+                  <Interruptor ligado={campos.redes_ligadas[id] !== false} aoMudar={(ligado) => mudarEm("redes_ligadas", id)(ligado)} rotulo={`Mostrar ${nome} no site`} />
+                  <label className="campo">{nome} (link)<input id={`site-${id}`} type="url" placeholder={exemplo} value={campos[id] ?? ""} onChange={mudar(id)} /></label>
+                </div>
+              ))}
+              <h3 style={{ margin: "8px 0 0" }}>Botões flutuantes</h3>
+              <div className="linha-interruptor">
+                <Interruptor ligado={campos.flutuantes.whatsapp} aoMudar={(ligado) => mudarEm("flutuantes", "whatsapp")(ligado)} rotulo="Mostrar o WhatsApp flutuante" />
+                <div>
+                  <b className="pequeno">WhatsApp no canto da tela</b>
+                  <p className="mudo pequeno" style={{ margin: 0 }}>Botão verde redondo. Na página do imóvel a mensagem já leva o código; na página de cada corretor, abre o WhatsApp dele.</p>
+                </div>
+              </div>
+              <div className="linha-interruptor">
+                <Interruptor ligado={campos.flutuantes.redes} aoMudar={(ligado) => mudarEm("flutuantes", "redes")(ligado)} rotulo="Mostrar as redes na lateral" />
+                <div>
+                  <b className="pequeno">Redes na lateral direita</b>
+                  <p className="mudo pequeno" style={{ margin: 0 }}>Só no computador. No celular fica escondida para não cobrir o conteúdo.</p>
+                </div>
+              </div>
+              <label className="campo">Mensagem pronta do WhatsApp
+                <input id="site-mensagem-whatsapp" maxLength={200} placeholder={`Olá! Vim pelo site da ${empresa.nome} e gostaria de mais informações.`} value={campos.mensagem_whatsapp ?? ""} onChange={mudar("mensagem_whatsapp")} />
+              </label>
             </div>
           )}
 

@@ -396,7 +396,141 @@ def paragrafos(texto):
     return "".join(f"<p>{e(p).replace(chr(10), '<br>')}</p>" for p in re.split(r"\n\s*\n", (texto or "").strip()) if p.strip())
 
 
-def pagina(config, versao, titulo, descricao, corpo, imagem=None, barra_movel="", caminho="/", tipo_og="website", capa=False):
+# --- Onde estamos (rodapé) e botões flutuantes ------------------------------
+# Tudo vem da tela Site do painel (Dados e contatos). Rede sem link ou desligada
+# não aparece; o mapa sai do endereço do escritório.
+
+# [id, nome, cor da rede, desenho do ícone]
+REDES_SOCIAIS = [
+    ("facebook", "Facebook", "#1877F2",
+     '<path fill="currentColor" d="M13.5 21v-7.5h2.6l.4-3h-3V8.6c0-.9.3-1.5 1.5-1.5h1.6V4.4c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.2H7.8v3h2.6V21z"/>'),
+    ("instagram", "Instagram", "#E4405F",
+     '<rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.3" cy="6.7" r="1.2" fill="currentColor"/>'),
+    ("youtube", "YouTube", "#FF0000",
+     '<path fill="currentColor" d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.5 2.5 0 0 0 2.4 7.2 26 26 0 0 0 2 12a26 26 0 0 0 .4 4.8 2.5 2.5 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8A26 26 0 0 0 22 12a26 26 0 0 0-.4-4.8zM10 15V9l5.2 3z"/>'),
+    ("tiktok", "TikTok", "#111111",
+     '<path fill="currentColor" d="M16.6 3c.3 2.1 1.6 3.6 3.9 3.8v3a7 7 0 0 1-3.9-1.2v6.2A5.8 5.8 0 1 1 10.8 9v3.1a2.8 2.8 0 1 0 2 2.7V3z"/>'),
+]
+ICONE_ZAP_CHEIO = '<svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7a2.8 2.8 0 0 0 1.8-1.3 2.3 2.3 0 0 0 .2-1.3c-.1-.1-.2-.2-.5-.3Z"/></svg>'
+ICONES_DO_RODAPE = {
+    "telefone": '<path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+    "email": '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+    "creci": '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16c.6-1.6 1.8-2.4 3.2-2.4s2.6.8 3.2 2.4M14 10h4M14 13h3"/>',
+    "relogio": '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    "rota": '<path d="M9 18 3 21V6l6-3 6 3 6-3v15l-6 3-6-3zM9 3v15M15 6v15"/>',
+}
+
+
+def icone_do_rodape(nome):
+    return f'<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ICONES_DO_RODAPE[nome]}</svg>'
+
+
+def redes_ativas(config):
+    ligadas = config.get("redes_ligadas") or {}
+    return [(rid, nome, cor, desenho, so_https(config.get(rid))) for rid, nome, cor, desenho in REDES_SOCIAIS
+            if so_https(config.get(rid)) and ligadas.get(rid, True) is not False]
+
+
+def icone_da_rede(desenho):
+    return f'<svg viewBox="0 0 24 24" aria-hidden="true">{desenho}</svg>'
+
+
+def mensagem_do_whatsapp(config):
+    padrao = f"Olá! Vim pelo site da {config.get('nome') or 'imobiliária'} e gostaria de mais informações."
+    return (config.get("mensagem_whatsapp") or "").strip() or padrao
+
+
+def link_do_telefone(config, telefone):
+    """Celular (9 dígitos depois do DDD) abre o WhatsApp; fixo abre a ligação."""
+    digitos = re.sub(r"\D", "", telefone)
+    if digitos.startswith("55") and len(digitos) > 11:
+        digitos = digitos[2:]
+    if len(digitos) == 11 and digitos[2] == "9":
+        texto = urllib.parse.quote(mensagem_do_whatsapp(config))
+        return f"https://wa.me/55{digitos}?text={texto}", True
+    return f"tel:+55{digitos}", False
+
+
+def onde_estamos(config, conversa):
+    nome = config.get("nome") or "Imobiliária"
+    endereco = (config.get("endereco") or "").strip()
+    busca = urllib.parse.quote(endereco)
+    mostrar_mapa = bool(endereco) and config.get("mostrar_mapa", True) is not False
+    mapa = (
+        f"""<div class="onde-mapa"><iframe title="Mapa: {e(endereco)}" src="https://www.google.com/maps?q={busca}&amp;output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe></div>"""
+        if mostrar_mapa else ""
+    )
+    itens = []
+    if endereco:
+        itens.append(f'<li>{icone("local")}<span>{e(endereco)}</span></li>')
+    if config.get("creci"):
+        itens.append(f'<li>{icone_do_rodape("creci")}<span>{e(config["creci"])}</span></li>')
+    telefones = []
+    for t in config.get("telefones") or []:
+        link, zap = link_do_telefone(config, t)
+        alvo = ' rel="noopener" target="_blank"' if zap else ""
+        telefones.append(f'<a href="{e(link)}"{alvo}>{e(t)}{" <small>WhatsApp</small>" if zap else ""}</a>')
+    if telefones:
+        itens.append(f'<li>{icone_do_rodape("telefone")}<span class="onde-telefones">{"".join(telefones)}</span></li>')
+    if config.get("email"):
+        itens.append(f'<li>{icone_do_rodape("email")}<span><a href="mailto:{e(config["email"])}">{e(config["email"])}</a></span></li>')
+    if config.get("horario"):
+        itens.append(f'<li>{icone_do_rodape("relogio")}<span>{e(config["horario"])}</span></li>')
+    redes = redes_ativas(config)
+    siga = (
+        '<div class="onde-redes"><span>Siga-nos:</span>'
+        + "".join(f'<a href="{e(url)}" rel="noopener" target="_blank" aria-label="{nome_rede}" title="{nome_rede}">{icone_da_rede(desenho)}</a>'
+                  for _, nome_rede, _, desenho, url in redes)
+        + "</div>"
+    ) if redes else ""
+    botoes = (
+        f"""<div class="onde-botoes">
+        <a class="botao" href="https://www.google.com/maps/dir/?api=1&amp;destination={busca}" rel="noopener" target="_blank">{icone_do_rodape("rota")}Como chegar</a>
+        <a class="botao claro" href="https://waze.com/ul?q={busca}&amp;navigate=yes" rel="noopener" target="_blank">Abrir no Waze</a>
+      </div>"""
+        if endereco else ""
+    )
+    rodape = texto_extra(config, "rodape")
+    cnpj = (config.get("cnpj") or "").strip()
+    linha_final = " · ".join(x for x in [f"CNPJ {e(cnpj)}" if cnpj else "", f"© {date.today().year} {e(nome)} – Todos os direitos reservados"] if x)
+    return f"""<footer class="rodape onde-estamos">
+  <div class="largura onde-grade{'' if mapa else ' sem-mapa'}">
+    {mapa}
+    <div class="onde-info">
+      <h2>Onde estamos?</h2>
+      <ul class="onde-lista">{''.join(itens)}</ul>
+      {botoes}
+      {siga}
+      {f'<p class="rodape-texto">{e(rodape)}</p>' if rodape else ''}
+    </div>
+  </div>
+  <div class="onde-base"><div class="largura">{linha_final}</div></div>
+</footer>"""
+
+
+def botoes_flutuantes(config, texto=None, clique=None, com_barra=False):
+    """WhatsApp redondo no canto e a coluna de redes na lateral (só no computador)."""
+    opcoes = config.get("flutuantes") or {}
+    partes = []
+    redes = redes_ativas(config)
+    if opcoes.get("redes", True) is not False and redes:
+        partes.append(
+            '<nav class="redes-flutuantes" aria-label="Redes sociais">'
+            + "".join(f'<a href="{e(url)}" rel="noopener" target="_blank" aria-label="{nome}" title="{nome}" style="--cor-rede: {cor}">{icone_da_rede(desenho)}</a>'
+                      for _, nome, cor, desenho, url in redes)
+            + "</nav>"
+        )
+    if opcoes.get("whatsapp", True) is not False and re.sub(r"\D", "", config.get("whatsapp") or ""):
+        link = link_whatsapp(config, texto or mensagem_do_whatsapp(config))
+        marca_clique = f' data-clique="{e(clique)}"' if clique else ""
+        partes.append(
+            f'<a class="zap-flutuante{" com-barra" if com_barra else ""}" href="{e(link)}" rel="noopener" target="_blank" aria-label="Fale conosco no WhatsApp"{marca_clique}>'
+            f'{ICONE_ZAP_CHEIO}<span class="zap-balao" aria-hidden="true">Fale conosco</span></a>'
+        )
+    return "".join(partes)
+
+
+def pagina(config, versao, titulo, descricao, corpo, imagem=None, barra_movel="", caminho="/", tipo_og="website", capa=False, zap_texto=None, zap_clique=None):
     nome = config.get("nome") or "Imobiliária"
     logo_propria = so_https(config.get("logo_url"))
     # Na página inicial o topo fica por cima da foto: usa a logo branca da LFG.
@@ -411,15 +545,8 @@ def pagina(config, versao, titulo, descricao, corpo, imagem=None, barra_movel=""
         f'<a href="{c}"{" aria-current=" + chr(34) + "page" + chr(34) if atual.startswith(c) else ""}>{r}</a>' for c, r in itens_do_menu
     )
     base = (config.get("endereco_site") or "").rstrip("/")
-    telefones = "".join(f'<li><a href="tel:+55{re.sub(chr(92) + "D", "", t)}">{e(t)}</a></li>' for t in config.get("telefones") or [])
-    redes = "".join(
-        f'<li><a href="{e(so_https(config.get(rede)))}" rel="noopener" target="_blank">{rotulo}</a></li>'
-        for rede, rotulo in (("instagram", "Instagram"), ("facebook", "Facebook")) if so_https(config.get(rede))
-    )
-    email = f'<li><a href="mailto:{e(config["email"])}">{e(config["email"])}</a></li>' if config.get("email") else ""
     conversa = link_whatsapp(config, f"Olá! Vim pelo site da {nome}.")
     aparencia = tema(config)
-    rodape = texto_extra(config, "rodape")
     return f"""<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -461,28 +588,9 @@ def pagina(config, versao, titulo, descricao, corpo, imagem=None, barra_movel=""
 <main id="conteudo">
 {corpo}
 </main>
-<footer class="rodape">
-  <div class="largura rodape-grade">
-    <div>
-      <b class="rodape-nome">{e(nome)}</b>
-      <p>{e(config.get('creci'))}</p>
-      {f'<p class="rodape-texto">{e(rodape)}</p>' if rodape else ''}
-    </div>
-    <div>
-      <b>Escritório</b>
-      <p>{e(config.get('endereco'))}</p>
-      <p>{e(config.get('horario'))}</p>
-    </div>
-    <div>
-      <b>Fale com a gente</b>
-      <ul>
-        <li><a href="{e(conversa)}" rel="noopener" target="_blank">WhatsApp</a></li>
-        {telefones}{email}{redes}
-      </ul>
-    </div>
-  </div>
-</footer>
+{onde_estamos(config, conversa)}
 {barra_movel}
+{botoes_flutuantes(config, zap_texto, zap_clique, com_barra=bool(barra_movel))}
 <script src="/site.js?v={versao}" defer></script>
 </body>
 </html>
@@ -951,6 +1059,8 @@ def pagina_imovel(config, imovel, imoveis, versao):
     return pagina(
         config, versao, f"{titulo_curto} · {imovel.get('referencia')} | {config.get('nome')}", descricao_curta(imovel), corpo,
         imagem=fotos[0] if fotos else None, barra_movel=barra, caminho=caminho,
+        zap_texto=f"{mensagem_do_whatsapp(config)} Imóvel {imovel.get('referencia')}: {titulo_claro}.",
+        zap_clique=imovel.get("referencia"),
     )
 
 
@@ -1277,7 +1387,11 @@ h2{font-family:Unbounded,system-ui,sans-serif;font-size:19px;margin:0 0 14px;col
 .preco{font-size:19px;font-weight:800;color:var(--marinho)}.titulo{font-weight:700}.local,.dados{color:var(--texto-2);font-size:14px}
 .vazio{background:#fff;border:1px solid var(--linha);border-radius:16px;padding:18px;color:var(--texto-2)}
 .mais{display:inline-block;margin-top:18px;color:var(--azul);font-weight:700}
-footer{padding:22px 16px 32px;text-align:center;color:var(--texto-2);font-size:14px}
+footer{padding:22px 16px 104px;text-align:center;color:var(--texto-2);font-size:14px}
+.zap-flutuante{position:fixed;right:20px;bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:20;display:grid;place-items:center;width:64px;height:64px;border-radius:50%;background:#25D366;color:#fff;box-shadow:0 10px 28px rgba(0,0,0,.28);text-decoration:none}
+.zap-flutuante svg{width:34px;height:34px}
+.zap-flutuante:focus-visible{outline:3px solid #94bf0b;outline-offset:3px}
+@media (prefers-reduced-motion:no-preference){.zap-flutuante::before{content:"";position:absolute;inset:0;border-radius:50%;background:#25D366;z-index:-1;animation:zap-pulso 2.4s ease-out infinite}@keyframes zap-pulso{0%{transform:scale(1);opacity:.55}80%,100%{transform:scale(1.6);opacity:0}}}
 """
 
 ICONE_WHATSAPP = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 0 1-3.3-2.9c-.3-.4.3-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 0 0-.7.3 3 3 0 0 0-.9 2.2 5.2 5.2 0 0 0 1.1 2.8 11.9 11.9 0 0 0 4.6 4c1.7.7 2.4.8 3.2.7a2.8 2.8 0 0 0 1.8-1.3 2.3 2.3 0 0 0 .2-1.3c-.1-.1-.2-.2-.5-.3Z"/></svg>'
@@ -1362,6 +1476,7 @@ def pagina_do_corretor(config, pessoa, imoveis, versao):
   <a class="mais" href="{e(site)}/">Ver todos os imóveis da {e(empresa)} →</a>
 </main>
 <footer>{e(empresa)}{f' · {e(config.get("creci"))}' if config.get("creci") else ''}</footer>
+{f'<a class="zap-flutuante" href="{e(whats)}" rel="noopener" aria-label="Falar com {e(primeiro)} no WhatsApp">{ICONE_ZAP_CHEIO}</a>' if (config.get("flutuantes") or {}).get("whatsapp", True) is not False else ''}
 </body>
 </html>
 """
@@ -1635,6 +1750,19 @@ def main():
     argumentos.add_argument("--forcar", action="store_true", help="refaz mesmo sem mudanças")
     opcoes_linha = argumentos.parse_args()
     saida = opcoes_linha.saida.resolve()
+
+    # Uma geração por vez. Sem a trava, a do cron (a cada minuto) e a da
+    # instalação rodaram juntas, uma apagou a pasta nova da outra e o site
+    # ficou com uma pasta pela metade (25/11/2026). Quem chega com outra
+    # rodando espera ela terminar.
+    trava = None
+    try:
+        import fcntl
+        saida.parent.mkdir(parents=True, exist_ok=True)
+        trava = open(saida.parent / f"{saida.name}.trava", "w")
+        fcntl.flock(trava, fcntl.LOCK_EX)
+    except ImportError:
+        pass  # Windows (teste local): sem cron, não precisa de trava.
 
     codigo = hashlib.sha256()
     for arquivo in ("gerar.py", "estilo.css", "site.js"):

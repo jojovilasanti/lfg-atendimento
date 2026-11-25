@@ -253,7 +253,8 @@ export function montarPrevia(config, imoveis, enderecoDoEstilo, equipe = []) {
     }
     return `<section class="faixa-marca"><div class="largura faixa-grade"><div><h2>${esc(s.titulo || `Sobre a ${config.nome ?? ""}`)}</h2>${paragrafos(String(config.sobre ?? "").split("\n\n")[0])}<a class="botao secundario" href="#">${esc(botao("sobre"))}</a></div><ul class="servicos">${(config.servicos ?? []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></section>`;
   });
-  const telefones = (config.telefones ?? []).map((t) => `<li><a href="#">${esc(t)}</a></li>`).join("");
+  const rodapeNovo = ondeEstamos(config);
+  const flutuantes = botoesFlutuantes(config);
   // Topo transparente sobre a foto: com a logo da LFG, a versão branca.
   const logo = config.logo_url || `${enderecoDoEstilo}/logo-lfg-branca.png`;
   const capa = `<section class="capa${abertura.centro ? " centro" : ""}" style="--capa-cor: ${cr}, ${cg}, ${cb}; --capa-forca: ${(abertura.escurecer / 100).toFixed(2)}">${fundo ? `<img class="capa-foto" src="${esc(fundo)}" alt="">` : ""}<div class="largura capa-miolo"><p class="capa-selo">${esc(selo)}</p><h1>${esc(config.titulo)}</h1>${config.subtitulo ? `<p class="capa-sub">${esc(config.subtitulo)}</p>` : ""}${chamada}</div></section>`;
@@ -263,6 +264,64 @@ export function montarPrevia(config, imoveis, enderecoDoEstilo, equipe = []) {
 <nav class="menu-principal"><a href="#">Comprar</a><a href="#">Alugar</a><a href="#">Sobre</a><a href="#">Contato</a></nav><a class="botao topo-botao" href="#">${esc(botao("topo"))}</a><button class="menu-botao" type="button"><span class="menu-risco" aria-hidden="true"></span></button></div></header>
 <main>${capa}
 ${secoes.join("\n")}</main>
-<footer class="rodape"><div class="largura rodape-grade"><div><b class="rodape-nome">${esc(config.nome)}</b><p>${esc(config.creci)}</p>${config.textos?.rodape?.trim() ? `<p class="rodape-texto">${esc(config.textos.rodape)}</p>` : ""}</div>
-<div><b>Escritório</b><p>${esc(config.endereco)}</p><p>${esc(config.horario)}</p></div><div><b>Fale com a gente</b><ul><li><a href="#">WhatsApp</a></li>${telefones}</ul></div></div></footer></body></html>`;
+${rodapeNovo}${flutuantes}</body></html>`;
+}
+
+// ----- Rodapé "Onde estamos" e botões flutuantes (igual a onde_estamos e botoes_flutuantes do gerador) -----
+
+const REDES_SOCIAIS = [
+  ["facebook", "Facebook", "#1877F2", '<path fill="currentColor" d="M13.5 21v-7.5h2.6l.4-3h-3V8.6c0-.9.3-1.5 1.5-1.5h1.6V4.4c-.3 0-1.2-.1-2.3-.1-2.3 0-3.9 1.4-3.9 4v2.2H7.8v3h2.6V21z"/>'],
+  ["instagram", "Instagram", "#E4405F", '<rect x="3.5" y="3.5" width="17" height="17" rx="5" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="17.3" cy="6.7" r="1.2" fill="currentColor"/>'],
+  ["youtube", "YouTube", "#FF0000", '<path fill="currentColor" d="M21.6 7.2a2.5 2.5 0 0 0-1.8-1.8C18.2 5 12 5 12 5s-6.2 0-7.8.4A2.5 2.5 0 0 0 2.4 7.2 26 26 0 0 0 2 12a26 26 0 0 0 .4 4.8 2.5 2.5 0 0 0 1.8 1.8C5.8 19 12 19 12 19s6.2 0 7.8-.4a2.5 2.5 0 0 0 1.8-1.8A26 26 0 0 0 22 12a26 26 0 0 0-.4-4.8zM10 15V9l5.2 3z"/>'],
+  ["tiktok", "TikTok", "#111111", '<path fill="currentColor" d="M16.6 3c.3 2.1 1.6 3.6 3.9 3.8v3a7 7 0 0 1-3.9-1.2v6.2A5.8 5.8 0 1 1 10.8 9v3.1a2.8 2.8 0 1 0 2 2.7V3z"/>'],
+];
+const ehHttps = (url) => typeof url === "string" && url.trim().startsWith("https://");
+const redesAtivas = (config) => REDES_SOCIAIS.filter(([id]) => ehHttps(config[id]) && config.redes_ligadas?.[id] !== false);
+const svgDaRede = (desenho) => `<svg viewBox="0 0 24 24" aria-hidden="true">${desenho}</svg>`;
+const ehCelular = (telefone) => {
+  let d = String(telefone).replace(/\D/g, "");
+  if (d.startsWith("55") && d.length > 11) d = d.slice(2);
+  return d.length === 11 && d[2] === "9";
+};
+
+const ICONES_DO_RODAPE = {
+  local: '<path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/>',
+  telefone: '<path d="M5 4h3l2 5-2.5 1.5a11 11 0 0 0 6 6L15 14l5 2v3a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>',
+  email: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  creci: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="11" r="2.2"/><path d="M5.8 16c.6-1.6 1.8-2.4 3.2-2.4s2.6.8 3.2 2.4M14 10h4M14 13h3"/>',
+  relogio: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+};
+const iconeDoRodape = (nome) => `<svg class="icone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES_DO_RODAPE[nome]}</svg>`;
+
+function ondeEstamos(config) {
+  const endereco = String(config.endereco ?? "").trim();
+  const mapa = endereco && config.mostrar_mapa !== false
+    ? `<div class="onde-mapa"><iframe title="Mapa" src="https://www.google.com/maps?q=${encodeURIComponent(endereco)}&amp;output=embed" loading="lazy"></iframe></div>`
+    : "";
+  const itens = [
+    endereco && `<li>${iconeDoRodape("local")}<span>${esc(endereco)}</span></li>`,
+    config.creci && `<li>${iconeDoRodape("creci")}<span>${esc(config.creci)}</span></li>`,
+    (config.telefones ?? []).length && `<li>${iconeDoRodape("telefone")}<span class="onde-telefones">${config.telefones.map((t) => `<a href="#">${esc(t)}${ehCelular(t) ? " <small>WhatsApp</small>" : ""}</a>`).join("")}</span></li>`,
+    config.email && `<li>${iconeDoRodape("email")}<span><a href="#">${esc(config.email)}</a></span></li>`,
+    config.horario && `<li>${iconeDoRodape("relogio")}<span>${esc(config.horario)}</span></li>`,
+  ].filter(Boolean).join("");
+  const redes = redesAtivas(config);
+  const siga = redes.length ? `<div class="onde-redes"><span>Siga-nos:</span>${redes.map(([, nome, , desenho]) => `<a href="#" aria-label="${nome}">${svgDaRede(desenho)}</a>`).join("")}</div>` : "";
+  const botoes = endereco ? '<div class="onde-botoes"><a class="botao" href="#">Como chegar</a><a class="botao claro" href="#">Abrir no Waze</a></div>' : "";
+  const rodape = config.textos?.rodape?.trim() ? `<p class="rodape-texto">${esc(config.textos.rodape)}</p>` : "";
+  const cnpj = String(config.cnpj ?? "").trim();
+  const final = [cnpj && `CNPJ ${esc(cnpj)}`, `© ${new Date().getFullYear()} ${esc(config.nome)} – Todos os direitos reservados`].filter(Boolean).join(" · ");
+  return `<footer class="rodape onde-estamos"><div class="largura onde-grade${mapa ? "" : " sem-mapa"}">${mapa}<div class="onde-info"><h2>Onde estamos?</h2><ul class="onde-lista">${itens}</ul>${botoes}${siga}${rodape}</div></div><div class="onde-base"><div class="largura">${final}</div></div></footer>`;
+}
+
+function botoesFlutuantes(config) {
+  const partes = [];
+  const redes = redesAtivas(config);
+  if (config.flutuantes?.redes !== false && redes.length) {
+    partes.push(`<nav class="redes-flutuantes">${redes.map(([, nome, corDaRede, desenho]) => `<a href="#" aria-label="${nome}" style="--cor-rede: ${corDaRede}">${svgDaRede(desenho)}</a>`).join("")}</nav>`);
+  }
+  if (config.flutuantes?.whatsapp !== false && String(config.whatsapp ?? "").replace(/\D/g, "")) {
+    partes.push('<a class="zap-flutuante" href="#" aria-label="WhatsApp"><svg class="icone" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm0 18.2a8.2 8.2 0 0 1-4.2-1.1l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1 1 12 20.2Z"/></svg><span class="zap-balao">Fale conosco</span></a>');
+  }
+  return partes.join("");
 }
