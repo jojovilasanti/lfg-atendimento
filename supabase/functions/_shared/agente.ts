@@ -27,7 +27,7 @@ export const RESPOSTA_DE_SEGURANCA =
 
 // Texto com marcação interna do modelo (tags XML, "antml:") não vai ao cliente:
 // o pedido é refeito; persistindo, a marcação é removida.
-const MARCACAO_INTERNA = /<\/?[a-z_][\w:-]*(\s[^>]*)?>|\bantml:/i;
+export const MARCACAO_INTERNA = /<\/?[a-z_][\w:-]*(\s[^>]*)?>|\bantml:/i;
 const MAX_REPETICOES_POR_MARCACAO = 2;
 
 // Relatório em vez de mensagem: a IA fala do cliente na terceira pessoa ou
@@ -83,7 +83,7 @@ async function conferenciaDizRelatorio(texto: string): Promise<boolean> {
   }
 }
 
-async function ehRelatorio(texto: string, lead: Lead): Promise<boolean> {
+export async function ehRelatorio(texto: string, lead: Lead): Promise<boolean> {
   if (RELATORIO_INTERNO.test(texto) || falaDoClientePeloNome(texto, lead)) return true;
   const relatorio = await conferenciaDizRelatorio(texto);
   if (relatorio) console.warn(`Conferência apontou relatório: ${texto.slice(0, 200)}`);
@@ -239,6 +239,11 @@ async function montarContexto(lead: Lead): Promise<string> {
   return [
     `Data e hora no escritório: ${agora}.`,
     `Situação do lead: ${situacao}.`,
+    lead.categoria === "empresa" || lead.categoria === "outros"
+      ? "Triagem: este contato está na lista Não clientes (não é cliente da imobiliária). Responda só com uma mensagem curta e educada dizendo que vai repassar ao setor responsável. Não passe ao corretor e não ofereça imóveis."
+      : lead.categoria === "cliente"
+        ? "Triagem: é cliente."
+        : "Triagem: ainda não classificado. Classifique com classificar_contato assim que tiver certeza.",
     anuncio
       ? `O cliente chegou tocando num anúncio do Facebook/Instagram. ${textoDoAnuncio ? `Texto do anúncio: «${textoDoAnuncio}»` : "O texto do anúncio não veio."}`
       : lead.origem === "disparo"

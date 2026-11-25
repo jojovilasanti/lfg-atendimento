@@ -4,7 +4,8 @@
 // do aluguel e histórico do lead ficam no banco (agenda_do_corretor); a tela só
 // avisa quando o corretor já tem outro compromisso no mesmo horário.
 import { useEffect, useMemo, useState } from "react";
-import { Carregando, diaIso, diaPorExtenso, Erro, hojeIso, hora, instanteNoFuso, nomeTipo, telefone, useCarregar } from "../comum.jsx";
+import Segmento from "../base/Segmento.jsx";
+import { Carregando, diaIso, diaPorExtenso, Erro, hojeIso, hora, instanteNoFuso, nomeTipo, telefone, useAgora, useCarregar, useEhCelular } from "../comum.jsx";
 import { Janela } from "../crm.jsx";
 import { ehMinhaCaptacao, semAcento } from "../imoveis.js";
 import { useSessao } from "../sessao.jsx";
@@ -128,6 +129,9 @@ export default function Agenda() {
   });
   const abrirDia = (dia) => { setReferencia(dia); setVisao("dia"); };
   const item = (v, compacto = false) => <Compromisso key={v.id} v={v} compacto={compacto} mostrarCorretor aoAbrir={() => setAberta(v.id)} />;
+  // No computador, Dia e Semana viram uma grade de horários; no celular, lista.
+  const celular = useEhCelular();
+  const diasDaSemana = Array.from({ length: 7 }, (_, n) => somarDias(inicioDaSemana(referencia), n));
 
   return (
     <section className="vista" aria-labelledby="t-agenda">
@@ -136,15 +140,18 @@ export default function Agenda() {
           <h2 id="t-agenda">Agenda</h2>
           <p>Visitas, captações e compromissos da equipe. Cada um edita e cancela só o que marcou ou o que é dele.</p>
         </div>
+        <button type="button" className="botao botao-agendar" onClick={() => setFormulario({})} disabled={!base.dados}>
+          <span aria-hidden="true">+</span> Agendar visita
+        </button>
       </div>
-      <button type="button" className="botao botao-agendar" onClick={() => setFormulario({})} disabled={!base.dados}>
-        <span aria-hidden="true">+</span> Agendar visita
-      </button>
 
       <div className="barra-calendario">
-        <div className="abas" role="tablist" aria-label="Visão">
-          {VISOES.map(([id, nome]) => <button key={id} type="button" role="tab" className="aba" aria-selected={visao === id} onClick={() => { setVisao(id); if (id === "hoje") setReferencia(hojeIso()); }}>{nome}</button>)}
-        </div>
+        <Segmento
+          rotulo="Visão da agenda"
+          valor={visao}
+          aoMudar={(id) => { setVisao(id); if (id === "hoje") setReferencia(hojeIso()); }}
+          opcoes={VISOES.map(([id, nome]) => ({ id, rotulo: nome }))}
+        />
         {base.dados && (
           <label className="campo campo-pessoa">
             <span className="invisivel">Corretor</span>
@@ -173,14 +180,16 @@ export default function Agenda() {
       {!lista.dados ? <Carregando /> : (
         <>
           {visao === "hoje" && <VisaoHoje porDia={porDia} item={item} />}
-          {visao === "dia" && (
+          {visao === "dia" && !celular && <GradeDeHoras dias={[referencia]} porDia={porDia} aoAbrir={setAberta} abrirDia={abrirDia} />}
+          {visao === "semana" && !celular && <GradeDeHoras dias={diasDaSemana} porDia={porDia} aoAbrir={setAberta} abrirDia={abrirDia} />}
+          {visao === "dia" && celular && (
             (porDia.get(referencia) ?? []).length
               ? <ul className="lista-compromissos">{porDia.get(referencia).map((v) => item(v))}</ul>
               : <div className="painel"><p className="mudo" style={{ margin: 0 }}>Nada marcado neste dia.</p></div>
           )}
-          {visao === "semana" && (
+          {visao === "semana" && celular && (
             <div className="semana-calendario">
-              {Array.from({ length: 7 }, (_, n) => somarDias(inicioDaSemana(referencia), n)).map((dia, n) => (
+              {diasDaSemana.map((dia, n) => (
                 <div key={dia} className={`coluna-dia ${dia === hojeIso() ? "hoje" : ""}`}>
                   <button type="button" className="cabeca-dia" onClick={() => abrirDia(dia)}>
                     {DIAS_CURTOS[n]} <span className="dado">{rotuloCurto(dia)}</span>
@@ -212,6 +221,92 @@ export default function Agenda() {
         />
       )}
     </section>
+  );
+}
+
+// Minutos desde a meia-noite no fuso da imobiliária ("14:30" vira 870).
+const minutosDoDia = (iso) => {
+  const [h, m] = hora(iso).split(":").map(Number);
+  return h * 60 + m;
+};
+const duracaoEmMinutos = (v) => Math.max(30, (new Date(v.fim) - new Date(v.inicio)) / 60000 || 60);
+const ALTURA_DA_HORA = 56;
+
+// Grade de horários (Dia e Semana no computador): cada compromisso é um bloco
+// na altura do horário e do tamanho da duração. Dois no mesmo horário dividem a largura.
+function GradeDeHoras({ dias, porDia, aoAbrir, abrirDia }) {
+  const agora = useAgora(60000);
+  const hoje = hojeIso();
+  const todos = dias.flatMap((d) => porDia.get(d) ?? []);
+  const inicios = todos.map((v) => minutosDoDia(v.inicio));
+  const fins = todos.map((v) => minutosDoDia(v.inicio) + duracaoEmMinutos(v));
+  const primeiraHora = Math.min(8, ...inicios.map((m) => Math.floor(m / 60)));
+  const ultimaHora = Math.min(24, Math.max(18, ...fins.map((m) => Math.ceil(m / 60))));
+  const horas = Array.from({ length: ultimaHora - primeiraHora }, (_, n) => primeiraHora + n);
+  const altura = horas.length * ALTURA_DA_HORA;
+  const topo = (minutos) => ((minutos - primeiraHora * 60) / 60) * ALTURA_DA_HORA;
+  const minutoAgora = minutosDoDia(new Date(agora).toISOString());
+
+  // Divide em faixas os que se cruzam no mesmo dia.
+  const blocosDoDia = (dia) => {
+    const lista = [...(porDia.get(dia) ?? [])].sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
+    const faixas = [];
+    const blocos = lista.map((v) => {
+      const ini = minutosDoDia(v.inicio);
+      const fim = ini + duracaoEmMinutos(v);
+      let faixa = faixas.findIndex((ate) => ate <= ini);
+      if (faixa < 0) {
+        faixa = faixas.length;
+        faixas.push(fim);
+      } else faixas[faixa] = fim;
+      return { v, ini, fim, faixa };
+    });
+    return blocos.map((b) => ({ ...b, total: Math.max(1, ...blocos.filter((o) => o.ini < b.fim && o.fim > b.ini).map((o) => o.faixa + 1)) }));
+  };
+
+  return (
+    <div className={`grade-horas ${dias.length === 1 ? "um-dia" : ""}`} style={{ "--colunas": dias.length }}>
+      <div className="grade-horas-cabeca">
+        <span />
+        {dias.map((dia) => (
+          <button key={dia} type="button" className={`grade-horas-dia ${dia === hoje ? "hoje" : ""}`} onClick={() => abrirDia(dia)} disabled={dias.length === 1}>
+            <small>{DIAS_CURTOS[diaDaSemana(dia)]}</small>
+            <b>{Number(dia.slice(8))}</b>
+          </button>
+        ))}
+      </div>
+      <div className="grade-horas-corpo" style={{ height: altura }}>
+        <div className="grade-horas-regua" aria-hidden="true">
+          {horas.map((h) => <span key={h} style={{ top: topo(h * 60) }}>{String(h).padStart(2, "0")}h</span>)}
+        </div>
+        {dias.map((dia) => (
+          <div key={dia} className={`grade-horas-coluna ${dia === hoje ? "hoje" : ""}`}>
+            {horas.map((h) => <i key={h} className="linha-hora" style={{ top: topo(h * 60) }} aria-hidden="true" />)}
+            {dia === hoje && minutoAgora >= primeiraHora * 60 && minutoAgora <= ultimaHora * 60 && (
+              <i className="linha-agora" style={{ top: topo(minutoAgora) }} aria-hidden="true" />
+            )}
+            {blocosDoDia(dia).map(({ v, ini, fim, faixa, total }) => {
+              const curto = fim - ini <= 45;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  className={`bloco-agenda tipo-${v.tipo} ${ativa(v) ? "" : "inativo"} ${curto ? "curto" : ""}`}
+                  style={{ top: topo(ini) + 1, height: Math.max(24, topo(fim) - topo(ini) - 2), left: `calc(${(faixa / total) * 100}% + 2px)`, width: `calc(${100 / total}% - 4px)` }}
+                  onClick={() => aoAbrir(v.id)}
+                  aria-label={`${TIPOS[v.tipo]?.[0]} às ${hora(v.inicio)}: ${tituloDo(v)}`}
+                  title={`${hora(v.inicio)}–${hora(v.fim)} · ${TIPOS[v.tipo]?.[1]} · ${tituloDo(v)}${v.corretor?.nome ? ` · ${primeiroNome(v.corretor.nome)}` : ""}`}
+                >
+                  <b>{hora(v.inicio)} · {TIPOS[v.tipo]?.[1]}</b>
+                  {!curto && <span>{tituloDo(v)}</span>}
+                  {!curto && v.corretor?.nome && <small>{primeiroNome(v.corretor.nome)}{v.cliente_nome ? ` · ${v.cliente_nome}` : ""}</small>}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

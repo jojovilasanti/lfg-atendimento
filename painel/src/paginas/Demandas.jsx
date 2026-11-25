@@ -4,6 +4,7 @@
 // o status; quem criou (e o gestor) edita e exclui. As regras ficam no banco
 // (migração demandas); a tela só esconde o que a pessoa não pode fazer.
 import { useState } from "react";
+import Segmento from "../base/Segmento.jsx";
 import { Carregando, diaIso, diaPorExtenso, Erro, EtiquetaPrazo, hojeIso, hora, jaVenceu, quando, useCarregar } from "../comum.jsx";
 import { Janela } from "../crm.jsx";
 import { useSessao } from "../sessao.jsx";
@@ -89,11 +90,7 @@ export default function Demandas() {
       </div>
 
       <div className="filtros" role="group" aria-label="Status">
-        <div className="chips">
-          {FILTROS.map(([id, nome]) => (
-            <button key={id} type="button" className="filtro" aria-pressed={filtro === id} onClick={() => setFiltro(id)}>{nome} <b>{contagem(id)}</b></button>
-          ))}
-        </div>
+        <Segmento rotulo="Situação das demandas" valor={filtro} aoMudar={setFiltro} opcoes={FILTROS.map(([id, nome]) => ({ id, rotulo: nome, conta: contagem(id) }))} />
         {(
           <label className="campo campo-pessoa">
             <span className="invisivel">Responsável</span>
@@ -106,9 +103,7 @@ export default function Demandas() {
       </div>
 
       <div className="barra-calendario">
-        <div className="abas" role="tablist" aria-label="Visão">
-          {VISOES.map(([id, nome]) => <button key={id} type="button" role="tab" className="aba" aria-selected={visao === id} onClick={() => setVisao(id)}>{nome}</button>)}
-        </div>
+        <Segmento pequeno rotulo="Visão das demandas" valor={visao} aoMudar={setVisao} opcoes={VISOES.map(([id, nome]) => ({ id, rotulo: nome }))} />
         {visao !== "lista" && (
           <div className="navegar-calendario">
             <button type="button" className="botao secundario pequeno" onClick={() => andar(-1)}>‹ Anterior</button>

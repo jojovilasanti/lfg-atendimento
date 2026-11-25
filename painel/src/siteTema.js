@@ -29,14 +29,18 @@ export const SECOES_PADRAO = [
   { id: "destaques", visivel: true, titulo: "Imóveis em destaque" },
   { id: "empreendimentos", visivel: true, titulo: "Lançamentos e empreendimentos" },
   { id: "numeros", visivel: true },
+  { id: "bairros", visivel: true, titulo: "Bairros para começar" },
+  { id: "chamadas", visivel: true },
   { id: "sobre", visivel: true, titulo: "" },
   { id: "equipe", visivel: true, titulo: "Nossa equipe" },
 ];
 
 export const NOME_DA_SECAO = {
   destaques: ["Imóveis em destaque", "Os imóveis escolhidos abaixo, completados com os mais recentes com boas fotos"],
-  empreendimentos: ["Empreendimentos", "Os 3 primeiros empreendimentos ativos (cadastro em Empreendimentos)"],
-  numeros: ["Números do estoque", "Quantos imóveis há para comprar e para alugar"],
+  empreendimentos: ["Empreendimentos", "O primeiro empreendimento ativo numa faixa larga com foto, e até mais 3 em cartões (cadastro em Empreendimentos)"],
+  numeros: ["Números do estoque", "Faixa escura com quantos imóveis há para comprar e alugar, lançamentos e bairros"],
+  bairros: ["Bairros para começar", "Os 4 bairros com mais imóveis, com foto; cada um abre a lista daquele bairro"],
+  chamadas: ["Vender ou alugar · Não achou?", "Dois blocos que abrem o WhatsApp: um para quem quer anunciar, outro para quem não achou o imóvel"],
   sobre: ["Sobre a imobiliária", "O primeiro parágrafo do texto Sobre e a lista de serviços"],
   equipe: ["Nossa equipe", "Foto, nome e CRECI da equipe ativa, em carrossel (vem de Meu perfil)"],
 };
@@ -95,6 +99,15 @@ export function secoesDaInicial(config) {
     escolhidas.splice(depois, 0, { ...conhecidas.empreendimentos });
     vistas.add("empreendimentos");
   }
+  // Bairros logo depois dos números; os dois blocos de WhatsApp antes do Sobre.
+  if (escolhidas.length) {
+    for (const [nova, vizinha, depois] of [["bairros", "numeros", true], ["chamadas", "sobre", false]]) {
+      if (vistas.has(nova)) continue;
+      const n = escolhidas.findIndex((s) => s.id === vizinha);
+      escolhidas.splice(n < 0 ? escolhidas.length : n + (depois ? 1 : 0), 0, { ...conhecidas[nova] });
+      vistas.add(nova);
+    }
+  }
   return [...escolhidas, ...SECOES_PADRAO.filter((s) => !vistas.has(s.id))];
 }
 
@@ -149,15 +162,33 @@ const positivo = (n) => (Number(n) > 0 ? Number(n) : null);
 
 function cartao(i) {
   const foto = i.foto_mini || i.foto_principal;
-  const preco = i.venda && positivo(i.valor_venda) ? dinheiro(i.valor_venda) : positivo(i.valor_locacao) ? `${dinheiro(i.valor_locacao)}/mês` : "Consulte";
+  const aluguel = !i.venda || !positivo(i.valor_venda);
+  const preco = !aluguel ? dinheiro(i.valor_venda) : positivo(i.valor_locacao) ? `${dinheiro(i.valor_locacao)}/mês` : "Consulte";
   const area = positivo(i.area_construida) ?? positivo(i.area_util) ?? positivo(i.area_terreno);
+  const quartos = Number(i.dormitorios) || 0;
+  const titulo = quartos ? `${nomeTipo(i.tipo)} com ${quartos} quarto${quartos === 1 ? "" : "s"}` : nomeTipo(i.tipo);
   const dados = [
-    i.dormitorios && `${i.dormitorios} quarto${i.dormitorios === 1 ? "" : "s"}`,
+    quartos && `${quartos} quarto${quartos === 1 ? "" : "s"}`,
     i.vagas && `${i.vagas} vaga${i.vagas === 1 ? "" : "s"}`,
     area && `${Math.round(area).toLocaleString("pt-BR")} m²`,
-  ].filter(Boolean).join(" · ");
+  ].filter(Boolean).map((d) => `<span>${esc(d)}</span>`).join("");
   return `<a class="cartao" href="#"><span class="cartao-foto">${foto ? `<img src="${esc(foto)}" alt="">` : '<span class="sem-foto">Sem foto</span>'}</span>
-<span class="cartao-corpo"><b class="cartao-preco">${esc(preco)}</b><span class="cartao-local">${esc(nomeTipo(i.tipo))} · ${esc(i.bairro)}</span><span class="cartao-dados">${esc(dados)}</span><span class="cartao-ref">${esc(i.referencia)}</span></span></a>`;
+<span class="cartao-corpo"><span class="cartao-bairro">${esc(i.bairro)}</span><span class="cartao-titulo">${esc(titulo)}</span><b class="cartao-preco">${esc(preco)}</b><span class="cartao-dados">${dados}</span><span class="cartao-ref">${esc(i.referencia)}</span></span></a>`;
+}
+
+// Igual a bairros_em_destaque do gerador: bairros com 3 ou mais imóveis, com foto de casa primeiro.
+function bairrosEmDestaque(imoveis, limite = 4) {
+  const grupos = new Map();
+  for (const i of imoveis) if (i.bairro) grupos.set(i.bairro, [...(grupos.get(i.bairro) ?? []), i]);
+  const ordemDoTipo = { CASA: 0, SOBRADO: 0, "TWO STORY HOUSE": 0, APARTAMENTO: 1 };
+  const escolhidos = [];
+  for (const [bairro, lista] of [...grupos].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))) {
+    const comFoto = lista.filter((i) => i.foto_principal).sort((a, b) => (ordemDoTipo[a.tipo] ?? 2) - (ordemDoTipo[b.tipo] ?? 2) || (b.fotos?.length ?? 0) - (a.fotos?.length ?? 0));
+    if (lista.length < 3 || !comFoto.length) continue;
+    escolhidos.push({ bairro, total: lista.length, foto: comFoto[0].foto_mini || comFoto[0].foto_principal });
+    if (escolhidos.length >= limite) break;
+  }
+  return escolhidos;
 }
 
 const paragrafos = (texto) =>
@@ -189,32 +220,48 @@ export function montarPrevia(config, imoveis, enderecoDoEstilo, equipe = []) {
   const fundo = config.banner_url || destaques.find((i) => i.foto_principal)?.foto_principal || "";
   const venda = imoveis.filter((i) => i.venda).length;
   const locacao = imoveis.filter((i) => i.locacao).length;
+  const totalBairros = new Set(imoveis.map((i) => i.bairro).filter(Boolean)).size;
+  const [cr, cg, cb] = rgb(misturar(cor(config, "principal"), "#000000", 0.5));
+  const selo = ["Campo Grande (MS)", config.creci].filter(Boolean).join(" · ");
+
   const chamada = abertura.busca
-    ? `<form class="busca"><fieldset class="busca-finalidade"><label><input type="radio" name="f" checked><span>Comprar</span></label><label><input type="radio" name="f"><span>Alugar</span></label></fieldset>
-<label>Tipo<select><option>Todos</option></select></label><label>Bairro<select><option>Todos</option></select></label><button class="botao" type="button">${esc(botao("busca"))}</button></form>`
+    ? `<form class="procura" onsubmit="return false"><fieldset class="procura-abas"><label><input type="radio" name="f" checked><span class="procura-aba">Comprar</span></label><label><input type="radio" name="f"><span class="procura-aba">Alugar</span></label><a class="procura-aba" href="#">Lançamentos</a></fieldset>
+<div class="procura-campos"><label class="procura-campo"><span>Bairro</span><select><option>Todos os bairros</option></select></label><label class="procura-campo"><span>Tipo</span><select><option>Todos os tipos</option></select></label><label class="procura-campo"><span>Até</span><select><option>Qualquer valor</option></select></label><button class="botao procura-botao" type="button">${esc(botao("busca"))}</button></div></form>`
     : '<p class="abertura-botoes"><a class="botao" href="#">Imóveis para comprar</a> <a class="botao claro" href="#">Imóveis para alugar</a></p>';
+
   const secoes = secoesDaInicial(config).filter((s) => s.visivel !== false).map((s) => {
     if (s.id === "destaques") {
-      return `<section class="largura secao"><div class="secao-cabeca"><h2>${esc(s.titulo || "Imóveis em destaque")}</h2><a href="#">Ver todos</a></div><div class="grade-imoveis destaques">${destaques.map(cartao).join("")}</div></section>`;
+      return `<section class="largura secao"><div class="secao-cabeca"><div><h2>${esc(s.titulo || "Imóveis em destaque")}</h2><p class="secao-sub">Escolhidos pela equipe, com fotos e dados conferidos.</p></div><a href="#">Ver os ${venda} imóveis</a></div><div class="grade-imoveis destaques">${destaques.map(cartao).join("")}</div></section>`;
     }
     if (s.id === "equipe") {
       return equipe.length ? `<section class="largura secao equipe"><h2>${esc(s.titulo || "Nossa equipe")}</h2>${equipe.length > 4 ? `<div class="carrossel"><div class="carrossel-janela"><ul class="carrossel-trilho">${equipe.map(pessoaDaEquipe).join("")}</ul></div></div>` : `<ul class="grade-equipe">${equipe.map(pessoaDaEquipe).join("")}</ul>`}</section>` : "";
     }
     if (s.id === "empreendimentos") {
-      return `<section class="largura secao"><div class="secao-cabeca"><h2>${esc(s.titulo || "Lançamentos e empreendimentos")}</h2><a href="#">Ver todos</a></div><p style="color:#47606f">Aqui aparecem os 3 primeiros empreendimentos ativos, cadastrados na tela Empreendimentos.</p></section>`;
+      return `<section class="largura secao"><div class="secao-cabeca"><h2>${esc(s.titulo || "Lançamentos e empreendimentos")}</h2><a href="#">Ver todos</a></div><div class="faixa-lancamento" style="min-height:260px"><span class="faixa-lancamento-texto"><span class="capa-selo">Lançamento</span><b>O primeiro empreendimento ativo</b><span>Aparece aqui com a foto, o tipo, o bairro e o preço (cadastro em Empreendimentos).</span></span></div></section>`;
     }
     if (s.id === "numeros") {
-      return `<section class="largura secao atalhos"><a class="atalho" href="#"><b>${venda}</b><span>imóveis para comprar</span></a><a class="atalho" href="#"><b>${locacao}</b><span>imóveis para alugar</span></a></section>`;
+      const itens = [[venda, "imóveis para comprar"], [locacao, "imóveis para alugar"], [totalBairros, "bairros com imóveis"]];
+      return `<section class="faixa-numeros"><div class="largura numeros-grade">${itens.map(([n, t]) => `<div class="numero-item"><b>${n}</b><small>${t}</small></div>`).join("")}</div></section>`;
+    }
+    if (s.id === "bairros") {
+      const bairros = bairrosEmDestaque(imoveis);
+      if (bairros.length < 3) return "";
+      return `<section class="largura secao"><div class="secao-cabeca"><div><h2>${esc(s.titulo || "Bairros para começar")}</h2><p class="secao-sub">Os bairros com mais opções hoje. Toque para ver o que está disponível.</p></div><a href="#">Ver todos</a></div><div class="bairros-sanfona">${bairros.map((b) => `<a class="bairro-item" href="#"><img src="${esc(b.foto)}" alt=""><span class="bairro-texto"><b>${esc(b.bairro)}</b><small>${b.total} imóve${b.total === 1 ? "l" : "is"}</small></span></a>`).join("")}</div></section>`;
+    }
+    if (s.id === "chamadas") {
+      return `<section class="largura secao chamadas"><div class="chamada-bloco claro"><h2>Quer vender ou alugar o seu imóvel?</h2><p>Conte para a gente como ele é. A equipe avalia, anuncia e acompanha as visitas com você.</p><a class="botao" href="#">Anunciar meu imóvel</a></div><div class="chamada-bloco escuro"><h2>Não achou o que procura?</h2><p>Diga o que você precisa e um corretor procura por você e avisa pelo WhatsApp.</p><a class="botao zap" href="#">Falar com um corretor</a></div></section>`;
     }
     return `<section class="faixa-marca"><div class="largura faixa-grade"><div><h2>${esc(s.titulo || `Sobre a ${config.nome ?? ""}`)}</h2>${paragrafos(String(config.sobre ?? "").split("\n\n")[0])}<a class="botao secundario" href="#">${esc(botao("sobre"))}</a></div><ul class="servicos">${(config.servicos ?? []).map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></section>`;
   });
   const telefones = (config.telefones ?? []).map((t) => `<li><a href="#">${esc(t)}</a></li>`).join("");
-  const logo = config.logo_url || `${enderecoDoEstilo}/logo-lfg.png`;
+  // Topo transparente sobre a foto: com a logo da LFG, a versão branca.
+  const logo = config.logo_url || `${enderecoDoEstilo}/logo-lfg-branca.png`;
+  const capa = `<section class="capa${abertura.centro ? " centro" : ""}" style="--capa-cor: ${cr}, ${cg}, ${cb}; --capa-forca: ${(abertura.escurecer / 100).toFixed(2)}">${fundo ? `<img class="capa-foto" src="${esc(fundo)}" alt="">` : ""}<div class="largura capa-miolo"><p class="capa-selo">${esc(selo)}</p><h1>${esc(config.titulo)}</h1>${config.subtitulo ? `<p class="capa-sub">${esc(config.subtitulo)}</p>` : ""}${chamada}</div></section>`;
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="${esc(fontes)}"><link rel="stylesheet" href="${esc(enderecoDoEstilo)}/estilo.css?previa=${MARCA_DA_PREVIA}"><style>${css} html { scroll-behavior: auto; }</style></head>
-<body><header class="topo"><div class="largura topo-linha"><a class="marca" href="#"><img src="${esc(logo)}" alt="${esc(config.nome)}" height="40"></a>
-<nav><a href="#">Comprar</a><a href="#">Alugar</a><a href="#">Sobre</a><a href="#">Contato</a></nav><a class="botao topo-botao" href="#">${esc(botao("topo"))}</a></div></header>
-<main><section class="abertura${abertura.centro ? " centro" : ""}" style="${esc(fundoDaAbertura(config, fundo))}"><div class="largura"><h1>${esc(config.titulo)}</h1><p class="abertura-sub">${esc(config.subtitulo)}</p>${chamada}</div></section>
+<link rel="stylesheet" href="${esc(fontes)}"><link rel="stylesheet" href="${esc(enderecoDoEstilo)}/estilo.css?previa=${MARCA_DA_PREVIA}"><style>${css} html { scroll-behavior: auto; } .topo.sobre-capa { position: absolute; } .capa-foto { animation: none; }</style></head>
+<body><header class="topo${config.logo_url ? "" : " sobre-capa"}"><div class="largura topo-linha"><a class="marca" href="#"><img src="${esc(logo)}" alt="${esc(config.nome)}" height="40"></a>
+<nav class="menu-principal"><a href="#">Comprar</a><a href="#">Alugar</a><a href="#">Sobre</a><a href="#">Contato</a></nav><a class="botao topo-botao" href="#">${esc(botao("topo"))}</a><button class="menu-botao" type="button"><span class="menu-risco" aria-hidden="true"></span></button></div></header>
+<main>${capa}
 ${secoes.join("\n")}</main>
 <footer class="rodape"><div class="largura rodape-grade"><div><b class="rodape-nome">${esc(config.nome)}</b><p>${esc(config.creci)}</p>${config.textos?.rodape?.trim() ? `<p class="rodape-texto">${esc(config.textos.rodape)}</p>` : ""}</div>
 <div><b>Escritório</b><p>${esc(config.endereco)}</p><p>${esc(config.horario)}</p></div><div><b>Fale com a gente</b><ul><li><a href="#">WhatsApp</a></li>${telefones}</ul></div></div></footer></body></html>`;

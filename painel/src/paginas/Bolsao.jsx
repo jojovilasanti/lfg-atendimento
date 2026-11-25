@@ -5,11 +5,13 @@
 // Antes de assumir, o corretor vê só o essencial: nada de telefone ou conversa.
 import { useEffect, useState } from "react";
 import { Carregando, Erro, haQuanto, OPERACAO, reais, Temperatura, useCarregar } from "../comum.jsx";
+import { useAviso } from "../base/Avisos.jsx";
 import { useSessao } from "../sessao.jsx";
 import { exigir, mensagemDeErro, supabase } from "../supabase.js";
 
 export default function Bolsao() {
   const { eu, souGestor, versao, recarregar } = useSessao();
+  const avisar = useAviso();
   const [rodada, setRodada] = useState(0);
   const [aviso, setAviso] = useState(null);
   const [ocupado, setOcupado] = useState(null);
@@ -17,6 +19,9 @@ export default function Bolsao() {
   // { id, acao: "finalizar" | "excluir" } esperando a confirmação.
   const [confirmando, setConfirmando] = useState(null);
   const podeAssumir = eu.papel !== "administrativo";
+  // Quando abri o Bolsão da última vez, antes desta visita: lead que entrou
+  // depois disso ganha a etiqueta NOVO até eu sair e voltar. undefined = lendo.
+  const [vistoAntes, setVistoAntes] = useState(undefined);
 
   const { dados, erro } = useCarregar(async () => {
     const [rLeads, rEquipe] = await Promise.all([
@@ -25,6 +30,17 @@ export default function Bolsao() {
     ]);
     return { leads: exigir(rLeads) ?? [], equipe: exigir(rEquipe) ?? [] };
   }, [versao, rodada]);
+
+  // Abrir a tela marca o Bolsão como visto; cada nova leitura com a tela aberta
+  // marca de novo, para o ponto verde do menu não voltar enquanto estou aqui.
+  useEffect(() => {
+    if (!dados) return;
+    supabase.rpc("marcar_bolsao_visto").then(({ data, error }) => {
+      if (!error) setVistoAntes((atual) => (atual === undefined ? data ?? null : atual));
+    });
+  }, [dados]);
+
+  const ehNovo = (l) => vistoAntes !== undefined && (vistoAntes === null || new Date(l.bolsao_desde) > new Date(vistoAntes));
 
   // A lista se atualiza sozinha: quem já foi assumido some para todos.
   useEffect(() => {
@@ -57,7 +73,7 @@ export default function Bolsao() {
     setAviso(null);
     try {
       exigir(await supabase.rpc(acao === "excluir" ? "excluir_do_bolsao" : "finalizar_do_bolsao", { p_lead_id: lead.id }));
-      setAviso(["ok", `${lead.nome ?? "Lead"} ${acao === "excluir" ? "excluído" : "finalizado"}. O cliente não recebeu mensagem.`]);
+      avisar(`${lead.nome ?? "Lead"} ${acao === "excluir" ? "excluído" : "finalizado"}. O cliente não recebeu mensagem.`);
       recarregar();
     } catch (e) {
       setAviso(["erro", mensagemDeErro(e)]);
@@ -76,7 +92,7 @@ export default function Bolsao() {
     try {
       exigir(await supabase.rpc("passar_lead", { p_lead_id: lead.id, p_corretor_id: corretor, p_direto: true }));
       const nome = dados.equipe.find((c) => c.id === corretor)?.nome ?? "o corretor";
-      setAviso(["ok", `${lead.nome ?? "Lead"} passado para ${nome}.`]);
+      avisar(`${lead.nome ?? "Lead"} passado para ${nome}.`);
       setRodada((n) => n + 1);
       recarregar();
     } catch (e) {
@@ -102,9 +118,10 @@ export default function Bolsao() {
       ) : (
         <ul className="lista-bolsao">
           {dados.leads.map((l) => (
-            <li key={l.id} className="painel lead-bolsao">
+            <li key={l.id} className={`painel lead-bolsao${ehNovo(l) ? " novo" : ""}${l.temperatura === "quente" ? " quente" : ""}`}>
               <div className="topo-bolsao">
                 <b>{l.nome ?? "Cliente sem nome"}</b>
+                {ehNovo(l) && <span className="etiqueta novo-bolsao">Novo</span>}
                 <Temperatura valor={l.temperatura} />
                 <span className="etiqueta pendente">no bolsão {haQuanto(l.bolsao_desde)}</span>
               </div>

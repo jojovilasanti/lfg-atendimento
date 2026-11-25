@@ -14,7 +14,10 @@ export const EMPRESA_PADRAO = {
   rodape_descricao: "",
   api: { mostrar_internos: false, mostrar_indisponiveis: false },
 };
-export const logoDaEmpresa = (empresa) => empresa?.logo_url || "/logo-lfg.png";
+// Logos oficiais da LFG: colorida para fundo claro, branca para fundo escuro.
+// Logo própria (Configurações gerais) vale nos dois temas.
+export const logoDaEmpresa = (empresa, fundoEscuro = false) =>
+  empresa?.logo_url || (fundoEscuro ? "/logo-lfg-branca.png" : "/logo-lfg.png");
 
 // Sessão do Supabase + cadastro da pessoa na equipe (tabela corretores) +
 // "versão" que aumenta a cada mudança em tempo real, para as telas recarregarem.
@@ -68,7 +71,9 @@ export function SessaoProvider({ children }) {
       espera.current = setTimeout(() => setVersao((v) => v + 1), 300);
     };
     const canal = supabase.channel("painel-lfg");
-    for (const tabela of ["leads", "mensagens", "atribuicoes", "corretores", "tarefas", "atividades"]) {
+    // bolsao_sinal muda quando um lead entra ou sai do Bolsão (o corretor não
+    // recebe o aviso do lead em si, que ainda não é dele).
+    for (const tabela of ["leads", "mensagens", "atribuicoes", "corretores", "tarefas", "atividades", "bolsao_sinal"]) {
       canal.on("postgres_changes", { event: "*", schema: "public", table: tabela }, avisar);
     }
     canal.subscribe();

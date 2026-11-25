@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
+import Segmento from "../base/Segmento.jsx";
 import {
   BotaoFechar, Carregando, contagem, dataHora, Erro, EtiquetaPrazo, haQuanto, hora, iniciais, Interruptor, PRAZO_ATENCAO_LEAD, OPERACAO, reais, Situacao, telefone, Temperatura, TextoWhatsApp, useAgora, useCarregar, useEhCelular, useFecharAoTocarFora, useFecharComEsc,
 } from "../comum.jsx";
@@ -19,12 +20,38 @@ const FILTROS = [
 const nomeLead = (l) => l.nome ?? "Cliente sem nome";
 const ehTeste = (l) => l.whatsapp.startsWith("sim-");
 
-export default function Leads({ leadAberto, abrirLead }) {
-  if (leadAberto) return <Lead id={leadAberto} voltar={() => abrirLead(null)} />;
-  return <ListaDeLeads abrirLead={abrirLead} />;
+// Computador largo: a lista fica numa coluna à esquerda enquanto o lead está aberto.
+const LARGO = "(min-width: 1280px)";
+function useTelaLarga() {
+  const [largo, setLargo] = useState(() => window.matchMedia?.(LARGO).matches ?? false);
+  useEffect(() => {
+    const consulta = window.matchMedia?.(LARGO);
+    if (!consulta) return;
+    const aoMudar = () => setLargo(consulta.matches);
+    consulta.addEventListener("change", aoMudar);
+    return () => consulta.removeEventListener("change", aoMudar);
+  }, []);
+  return largo;
 }
 
-function ListaDeLeads({ abrirLead }) {
+export default function Leads({ leadAberto, abrirLead }) {
+  const largo = useTelaLarga();
+  // Filtros e busca ficam aqui em cima: valem para a tabela e para a coluna,
+  // e não se perdem ao abrir e fechar um lead.
+  const lista = useListaDeLeads();
+  if (leadAberto && largo) {
+    return (
+      <div className="caixa-de-entrada">
+        <ColunaDeLeads lista={lista} aberto={leadAberto} abrirLead={abrirLead} />
+        <Lead id={leadAberto} voltar={() => abrirLead(null)} />
+      </div>
+    );
+  }
+  if (leadAberto) return <Lead id={leadAberto} voltar={() => abrirLead(null)} />;
+  return <ListaDeLeads lista={lista} abrirLead={abrirLead} />;
+}
+
+function useListaDeLeads() {
   const { versao } = useSessao();
   const [filtro, setFiltro] = useState("todos");
   const [busca, setBusca] = useState("");
@@ -36,7 +63,7 @@ function ListaDeLeads({ abrirLead }) {
     const leads = exigir(
       await supabase
         .from("leads")
-        .select("id, nome, whatsapp, origem, campanha, campanha_ia_id, status, temperatura, interesse, ficha, imovel_codigo, corretor_id, etapa, criado_em, ultima_mensagem, ultima_mensagem_autor, ultima_mensagem_em")
+        .select("id, nome, whatsapp, origem, campanha, campanha_ia_id, categoria, status, temperatura, interesse, ficha, imovel_codigo, corretor_id, etapa, criado_em, ultima_mensagem, ultima_mensagem_autor, ultima_mensagem_em")
         .order("ultima_mensagem_em", { ascending: false, nullsFirst: false })
         .limit(300),
     );
@@ -46,7 +73,7 @@ function ListaDeLeads({ abrirLead }) {
   }, [versao]);
 
   const termo = busca.trim().toLowerCase();
-  const base = (dados?.leads ?? []).filter((l) => mostrarTestes || !ehTeste(l));
+  const base = (dados?.leads ?? []).filter((l) => mostrarTestes || !ehTeste(l)).filter((l) => l.categoria !== "empresa" && l.categoria !== "outros");
   const [, , regra] = FILTROS.find(([id]) => id === filtro);
   // Pedido do formulário do site: "Site – Empreendimento X" tem filtro próprio.
   const chaveDaOrigem = (l) => (l.origem === "site" && l.campanha ? `s:${l.campanha}` : l.campanha_ia_id ? `c:${l.campanha_ia_id}` : `o:${l.origem ?? ""}`);
@@ -57,7 +84,11 @@ function ListaDeLeads({ abrirLead }) {
   ];
   const visiveis = base.filter(regra).filter((l) => origem === "todas" || chaveDaOrigem(l) === origem).filter((l) => !termo || `${l.nome ?? ""} ${l.whatsapp} ${l.ficha?.regiao ?? ""}`.toLowerCase().includes(termo));
   const testes = (dados?.leads ?? []).filter(ehTeste).length;
+  return { dados, erro, filtro, setFiltro, busca, setBusca, mostrarTestes, setMostrarTestes, origem, setOrigem, base, origens, visiveis, testes };
+}
 
+function ListaDeLeads({ lista, abrirLead }) {
+  const { dados, erro, filtro, setFiltro, busca, setBusca, mostrarTestes, setMostrarTestes, origem, setOrigem, base, origens, visiveis, testes } = lista;
   return (
     <section className="vista" aria-labelledby="t-leads">
       <div className="cabeca-vista">
@@ -68,11 +99,7 @@ function ListaDeLeads({ abrirLead }) {
       </div>
       <div className="filtros">
         <div className="chips">
-          {FILTROS.map(([id, texto, r]) => (
-            <button key={id} type="button" className="filtro" aria-pressed={filtro === id} onClick={() => setFiltro(id)}>
-              {texto} <b>{base.filter(r).length}</b>
-            </button>
-          ))}
+          <Segmento rotulo="Filtrar leads" valor={filtro} aoMudar={setFiltro} opcoes={FILTROS.map(([id, texto, r]) => ({ id, rotulo: texto, conta: base.filter(r).length }))} />
           {testes > 0 && (
             <button type="button" className="filtro" aria-pressed={mostrarTestes} onClick={() => setMostrarTestes(!mostrarTestes)}>
               Testes do simulador <b>{testes}</b>
@@ -111,6 +138,58 @@ function ListaDeLeads({ abrirLead }) {
         </div>
       )}
     </section>
+  );
+}
+
+
+// Coluna da caixa de entrada: a mesma lista, em cartões curtos.
+function ColunaDeLeads({ lista, aberto, abrirLead }) {
+  const { dados, erro, filtro, setFiltro, busca, setBusca, base, visiveis } = lista;
+  const ativo = useRef(null);
+  useEffect(() => {
+    ativo.current?.scrollIntoView({ block: "nearest" });
+  }, [aberto, dados === undefined]);
+  return (
+    <aside className="coluna-leads" aria-label="Lista de leads">
+      <div className="coluna-leads-topo">
+        <div className="coluna-leads-titulo">
+          <b>Leads</b>
+          <button type="button" className="link-botao" onClick={() => abrirLead(null)}>Ver em tabela</button>
+        </div>
+        <input className="busca" type="search" placeholder="Buscar nome, número ou região" value={busca} onChange={(e) => setBusca(e.target.value)} aria-label="Buscar leads" />
+        <label className="campo">
+          <span className="invisivel">Filtrar leads</span>
+          <select value={filtro} onChange={(e) => setFiltro(e.target.value)}>
+            {FILTROS.map(([id, texto, r]) => <option key={id} value={id}>{texto} ({base.filter(r).length})</option>)}
+          </select>
+        </label>
+      </div>
+      <Erro mensagem={erro} />
+      {dados === undefined ? <Carregando /> : (
+        <ul className="coluna-leads-lista">
+          {visiveis.length === 0 && <li className="mudo pequeno coluna-leads-vazio">Nenhum lead com esse filtro.</li>}
+          {visiveis.map((l) => {
+            const eAberto = String(l.id) === String(aberto);
+            return (
+              <li key={l.id}>
+                <button type="button" ref={eAberto ? ativo : undefined} className={`item-lead${eAberto ? " aberto" : ""}`} aria-current={eAberto ? "true" : undefined} onClick={() => abrirLead(l.id)}>
+                  <span className={`avatar pequeno ${l.nome ? "" : "sem-nome"}`} aria-hidden="true">{iniciais(l.nome)}</span>
+                  <span className="item-lead-miolo">
+                    <span className="item-lead-linha"><b>{nomeLead(l)}</b><small>{haQuanto(l.ultima_mensagem_em)}</small></span>
+                    <span className="item-lead-trecho">{l.ultima_mensagem_autor === "cliente" ? "" : l.ultima_mensagem_autor === "ia" ? "IA: " : l.ultima_mensagem_autor === "corretor" ? "Corretor: " : ""}{l.ultima_mensagem ?? "Sem mensagens"}</span>
+                    <span className="item-lead-etiquetas">
+                      <Situacao status={l.status} />
+                      {l.temperatura && <Temperatura valor={l.temperatura} />}
+                      {ehTeste(l) && <span className="etiqueta pendente">teste</span>}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </aside>
   );
 }
 
@@ -393,6 +472,7 @@ function Lead({ id, voltar }) {
   const [parte, setParte] = useState("negociacao");
   const [editando, setEditando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
+  const [naoCliente, setNaoCliente] = useState(false);
   const celular = useEhCelular();
   // No computador a barra já vem aberta; no celular, fechada para sobrar conversa.
   const [barraAberta, setBarraAberta] = useState(() => !window.matchMedia?.("(max-width: 760px)").matches);
@@ -647,6 +727,9 @@ function Lead({ id, voltar }) {
               {podeResponder && lead.status !== "encerrado" && (
                 <button type="button" className="botao secundario pequeno barra-finalizar" onClick={() => setFinalizando(true)}>Finalizar cliente</button>
               )}
+              {podeResponder && lead.status !== "encerrado" && lead.categoria !== "empresa" && lead.categoria !== "outros" && (
+                <button type="button" className="botao secundario pequeno" onClick={() => setNaoCliente(true)}>Não é cliente</button>
+              )}
             </div>
           )}
         </div>
@@ -656,6 +739,12 @@ function Lead({ id, voltar }) {
         </div>
       </div>
       {finalizando && <FinalizarCliente lead={lead} aoFechar={() => setFinalizando(false)} aoFinalizar={() => { setFinalizando(false); recarregar(); }} />}
+      {naoCliente && <MarcarNaoCliente lead={lead} aoFechar={() => setNaoCliente(false)} aoMarcar={() => { setNaoCliente(false); recarregar(); }} />}
+      {(lead.categoria === "empresa" || lead.categoria === "outros") && (
+        <p className="aviso-erro" style={{ margin: "0 0 8px" }}>
+          Na lista Não clientes ({lead.categoria === "empresa" ? "empresa ou prestador" : "outros"}){lead.categoria_motivo ? `: ${lead.categoria_motivo}` : ""}. Fora do rodízio.
+        </p>
+      )}
       {lead.status === "encerrado" && lead.motivo_perda && (
         <p className="pequeno mudo" style={{ margin: "0 0 8px" }}>Atendimento finalizado: {lead.motivo_perda}. Se o cliente escrever de novo, o lead reabre sozinho.</p>
       )}
@@ -684,6 +773,7 @@ function Lead({ id, voltar }) {
                     </button>
                   )}
                   {m.tipo === "acompanhamento" && <span className="rotulo-transcricao">Aviso automático de fila</span>}
+                  {m.tipo === "followup_corretor" && <span className="rotulo-transcricao">Follow-up automático da Thais</span>}
                   {TIPOS_DE_MIDIA.has(m.tipo) && <Midia m={m} url={m.urlLocal ?? midias.get(m.midia_url)} />}
                   {m.tipo === "audio" && m.conteudo && <span className="rotulo-transcricao">Transcrição automática</span>}
                   <TextoWhatsApp texto={m.conteudo} />
@@ -844,6 +934,52 @@ function Lead({ id, voltar }) {
 // Motivos para finalizar: os dois mais comuns primeiro, depois os de perda da
 // negociação (Configurações), com "Outro" no fim.
 const MOTIVOS_DE_FINALIZAR = ["Sem interesse", "Não é cliente (engano, robô ou spam)"];
+
+// "Não é cliente": vai para a lista Não clientes e a vez do rodízio volta.
+function MarcarNaoCliente({ lead, aoFechar, aoMarcar }) {
+  const [categoria, setCategoria] = useState("empresa");
+  const [motivo, setMotivo] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState(null);
+
+  async function confirmar(evento) {
+    evento.preventDefault();
+    setOcupado(true);
+    setErro(null);
+    try {
+      exigir(await supabase.rpc("marcar_nao_cliente", { p_lead_id: lead.id, p_categoria: categoria, p_motivo: motivo }));
+      aoMarcar();
+    } catch (e) {
+      setErro(mensagemDeErro(e));
+      setOcupado(false);
+    }
+  }
+
+  return (
+    <Janela titulo={`Não é cliente: ${lead.nome ?? "contato sem nome"}`} aoFechar={aoFechar}>
+      <form onSubmit={confirmar} className="formulario">
+        <div className="opcoes-radio" role="radiogroup" aria-label="O que é este contato">
+          {[["empresa", "Empresa ou prestador oferecendo produto ou serviço"], ["outros", "Outros (vaga de emprego, corretor parceiro, engano, spam)"]].map(([id, nome]) => (
+            <label key={id} className={categoria === id ? "marcado" : ""}>
+              <input type="radio" name="categoria" checked={categoria === id} onChange={() => setCategoria(id)} />{nome}
+            </label>
+          ))}
+        </div>
+        <label className="campo">O que a pessoa queria? <small className="mudo">(opcional)</small>
+          <input maxLength={300} value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Ex.: agência oferecendo anúncios" />
+        </label>
+        <p className="mudo pequeno" style={{ margin: 0 }}>
+          O contato vai para a lista Não clientes, sai do seu atendimento e, se veio do rodízio, a sua vez volta. Fica registrado que foi você quem marcou.
+        </p>
+        <Erro mensagem={erro} />
+        <div className="acoes-formulario">
+          <button type="button" className="botao secundario" onClick={aoFechar}>Cancelar</button>
+          <button type="submit" className="botao" disabled={ocupado}>{ocupado ? "Marcando…" : "Marcar como não cliente"}</button>
+        </div>
+      </form>
+    </Janela>
+  );
+}
 
 function FinalizarCliente({ lead, aoFechar, aoFinalizar }) {
   const [motivo, setMotivo] = useState("");

@@ -41,6 +41,8 @@ SECOES_PADRAO = [
     {"id": "destaques", "visivel": True, "titulo": "Imóveis em destaque"},
     {"id": "empreendimentos", "visivel": True, "titulo": "Lançamentos e empreendimentos"},
     {"id": "numeros", "visivel": True},
+    {"id": "bairros", "visivel": True, "titulo": "Bairros para começar"},
+    {"id": "chamadas", "visivel": True},
     {"id": "sobre", "visivel": True, "titulo": ""},
     {"id": "equipe", "visivel": True, "titulo": "Nossa equipe"},
 ]
@@ -48,6 +50,7 @@ SECOES_PADRAO = [
 TIPOS = {
     "CASA": "Casa", "APARTAMENTO": "Apartamento", "TERRENO": "Terreno", "CHACARA": "Chácara", "SALAO": "Salão",
     "BARRACAO": "Barracão", "SALA": "Sala", "GALPAO": "Galpão", "PONTO": "Ponto comercial", "AREA": "Área", "COMERCIAL": "Comercial",
+    "TWO STORY HOUSE": "Sobrado", "SOBRADO": "Sobrado",
 }
 COMODIDADES = {
     "Piscina": "Piscina", "Arealazer": "Área de lazer", "Varandagourmet": "Varanda gourmet", "Gourmet": "Espaço gourmet",
@@ -209,6 +212,61 @@ def metros(valor):
     return f"{int(round(valor)):,}".replace(",", ".") + " m²"
 
 
+# Ícones simples (traço) para os dados do imóvel.
+ICONES = {
+    "quartos": '<path d="M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6M3 18h18M5 10V6h14v4"/>',
+    "suites": '<path d="M3 18v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6M3 18h18M5 10V6h14v4M15 6v4"/>',
+    "banheiros": '<path d="M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-3zM6 12V6a2 2 0 0 1 4 0"/>',
+    "vagas": '<path d="M5 17h14M6 17l1.5-6h9L18 17M8 17v2M16 17v2"/>',
+    "area": '<path d="M4 4h16v16H4zM4 9h5M15 20v-5"/>',
+    "terreno": '<path d="M3 20l6-10 4 6 3-4 5 8z"/>',
+    "local": '<path d="M12 21s-7-6.2-7-12a7 7 0 0 1 14 0c0 5.8-7 12-7 12z"/><circle cx="12" cy="9" r="2.5"/>',
+    "fotos": '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
+    "camera": '<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>',
+    "agenda": '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+    "zap": '<path d="M12 3a9 9 0 0 0-7.8 13.4L3 21l4.7-1.2A9 9 0 1 0 12 3z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1-1.5-2-1-1 .8a4 4 0 0 1-1.8-1.8l.8-1-1-2z"/>',
+    "filtro": '<path d="M4 6h16M7 12h10M10 18h4"/>',
+}
+
+
+def icone(nome, classe="icone"):
+    return f'<svg class="{classe}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ICONES[nome]}</svg>'
+
+
+PREPOSICAO_NA = {"vila", "chácara", "chacara", "cidade", "colônia", "colonia", "fazenda", "rua", "avenida", "estância", "estancia"}
+
+
+def no_bairro(bairro):
+    """"no Centro", "na Vila Glória": a preposição certa antes do bairro."""
+    bairro = (bairro or "").strip()
+    if not bairro:
+        return ""
+    return f"{'na' if bairro.split()[0].lower() in PREPOSICAO_NA else 'no'} {bairro}"
+
+
+def miolo_do_titulo(imovel):
+    """"Casa com 3 suítes", "Terreno de 360 m²": o que é o imóvel, sem o bairro."""
+    tipo = nome_tipo(imovel.get("tipo"))
+    quartos = int(imovel.get("dormitorios") or 0)
+    suites = int(imovel.get("suites") or 0)
+    if imovel.get("tipo") in ("TERRENO", "AREA", "CHACARA"):
+        tamanho = numero(imovel.get("area_terreno")) or area(imovel)
+        return f"{tipo} de {metros(tamanho)}" if tamanho else tipo
+    if quartos:
+        if suites and suites >= quartos:
+            return f"{tipo} com {suites} suíte{'s' if suites != 1 else ''}"
+        return f"{tipo} com {quartos} quarto{'s' if quartos != 1 else ''}"
+    if area(imovel):
+        return f"{tipo} de {metros(area(imovel))}"
+    return tipo
+
+
+def titulo_do_imovel(imovel):
+    """Título curto e claro, montado dos dados (o título do Univen é longo e varia muito).
+    Ex.: "Casa com 3 suítes no Alphaville", "Terreno de 360 m² no Jardim Noroeste"."""
+    return f"{miolo_do_titulo(imovel)} {no_bairro(imovel.get('bairro'))}".strip()
+
+
 def caminho_do_imovel(imovel):
     """Mesmo endereço do site atual, para os links antigos continuarem valendo."""
     caminho = urllib.parse.urlparse(imovel.get("link_site") or "").path
@@ -338,9 +396,20 @@ def paragrafos(texto):
     return "".join(f"<p>{e(p).replace(chr(10), '<br>')}</p>" for p in re.split(r"\n\s*\n", (texto or "").strip()) if p.strip())
 
 
-def pagina(config, versao, titulo, descricao, corpo, imagem=None, barra_movel="", caminho="/", tipo_og="website"):
+def pagina(config, versao, titulo, descricao, corpo, imagem=None, barra_movel="", caminho="/", tipo_og="website", capa=False):
     nome = config.get("nome") or "Imobiliária"
-    logo = so_https(config.get("logo_url")) or f"/logo-lfg.png?v={versao}"
+    logo_propria = so_https(config.get("logo_url"))
+    # Na página inicial o topo fica por cima da foto: usa a logo branca da LFG.
+    capa = capa and not logo_propria
+    logo = logo_propria or (f"/logo-lfg-branca.png?v={versao}" if capa else f"/logo-lfg.png?v={versao}")
+    itens_do_menu = [("/comprar/", "Comprar"), ("/alugar/", "Alugar")]
+    if EMPREENDIMENTOS:
+        itens_do_menu.append(("/empreendimentos/", "Empreendimentos"))
+    itens_do_menu += [("/sobre/", "Sobre"), ("/contato/", "Contato")]
+    atual = href(caminho)
+    links_do_menu = "\n      ".join(
+        f'<a href="{c}"{" aria-current=" + chr(34) + "page" + chr(34) if atual.startswith(c) else ""}>{r}</a>' for c, r in itens_do_menu
+    )
     base = (config.get("endereco_site") or "").rstrip("/")
     telefones = "".join(f'<li><a href="tel:+55{re.sub(chr(92) + "D", "", t)}">{e(t)}</a></li>' for t in config.get("telefones") or [])
     redes = "".join(
@@ -378,17 +447,15 @@ def pagina(config, versao, titulo, descricao, corpo, imagem=None, barra_movel=""
 </head>
 <body>
 <a class="pular" href="#conteudo">Pular para o conteúdo</a>
-<header class="topo">
+<header class="topo{' sobre-capa' if capa else ''}" data-topo>
   <div class="largura topo-linha">
-    <a class="marca" href="/"><img src="{e(logo)}" alt="{e(nome)}" height="40"></a>
-    <nav aria-label="Principal">
-      <a href="/comprar/">Comprar</a>
-      <a href="/alugar/">Alugar</a>
-      {'<a href="/empreendimentos/">Empreendimentos</a>' if EMPREENDIMENTOS else ''}
-      <a href="/sobre/">Sobre</a>
-      <a href="/contato/">Contato</a>
+    <a class="marca" href="/"><img src="{e(logo)}" alt="{e(nome)}" height="40"{'' if logo_propria else f' data-logo-branca="/logo-lfg-branca.png?v={versao}"'}></a>
+    <nav class="menu-principal" id="menu-principal" aria-label="Principal">
+      {links_do_menu}
+      <a class="botao zap menu-zap" href="{e(conversa)}" rel="noopener" target="_blank">{icone('zap')}Falar no WhatsApp</a>
     </nav>
     <a class="botao topo-botao" href="{e(conversa)}" rel="noopener" target="_blank">{e(botao(config, 'topo'))}</a>
+    <button class="menu-botao" type="button" aria-expanded="false" aria-controls="menu-principal" data-menu><span class="menu-risco" aria-hidden="true"></span><span class="invisivel">Abrir o menu</span></button>
   </div>
 </header>
 <main id="conteudo">
@@ -422,19 +489,36 @@ def pagina(config, versao, titulo, descricao, corpo, imagem=None, barra_movel=""
 """
 
 
-def cartao(imovel, finalidade=None):
+def dados_do_cartao(imovel):
+    """Quartos, vagas e área com ícone, numa linha só."""
+    itens = []
+    if imovel.get("dormitorios"):
+        n = imovel["dormitorios"]
+        itens.append(("quartos", f"{n} quarto{'s' if n != 1 else ''}"))
+    if imovel.get("vagas"):
+        n = imovel["vagas"]
+        itens.append(("vagas", f"{n} vaga{'s' if n != 1 else ''}"))
+    if area(imovel):
+        itens.append(("area", metros(area(imovel))))
+    return "".join(f"<span>{icone(i)}{e(t)}</span>" for i, t in itens)
+
+
+def cartao(imovel, finalidade=None, ordem=0):
     foto = so_https(imovel.get("foto_mini")) or so_https(imovel.get("foto_principal"))
     imagem = (
         f'<img src="{e(foto)}" alt="{e(nome_tipo(imovel.get("tipo")))} em {e(imovel.get("bairro"))}" loading="lazy" decoding="async">'
         if foto else '<span class="sem-foto">Sem foto</span>'
     )
+    total_fotos = len(imovel.get("fotos") or [])
+    qtd = f'<span class="cartao-qtd">{icone("camera")}{total_fotos}</span>' if total_fotos > 1 else ""
     valor = numero(imovel.get("valor_locacao" if finalidade == "locacao" else "valor_venda")) or 0
-    return f"""<a class="cartao" href="{e(href(caminho_do_imovel(imovel)))}" data-tipo="{e(imovel.get('tipo'))}" data-bairro="{e(imovel.get('bairro'))}" data-valor="{int(valor)}" data-quartos="{imovel.get('dormitorios') or 0}">
-  <span class="cartao-foto">{imagem}{marca_dagua(imovel) if foto else ''}</span>
+    return f"""<a class="cartao" href="{e(href(caminho_do_imovel(imovel)))}" data-tipo="{e(imovel.get('tipo'))}" data-bairro="{e(imovel.get('bairro'))}" data-valor="{int(valor)}" data-quartos="{imovel.get('dormitorios') or 0}" data-ordem="{ordem}">
+  <span class="cartao-foto">{imagem}{marca_dagua(imovel) if foto else ''}{qtd}</span>
   <span class="cartao-corpo">
+    <span class="cartao-bairro">{e(imovel.get('bairro'))}</span>
+    <span class="cartao-titulo">{e(miolo_do_titulo(imovel))}</span>
     <b class="cartao-preco">{e(preco_do_imovel(imovel, finalidade))}</b>
-    <span class="cartao-local">{e(nome_tipo(imovel.get('tipo')))} · {e(imovel.get('bairro'))}</span>
-    <span class="cartao-dados">{e(' · '.join(resumo_do_imovel(imovel)))}</span>
+    <span class="cartao-dados">{dados_do_cartao(imovel)}</span>
     <span class="cartao-ref">{e(imovel.get('referencia'))}</span>
   </span>
 </a>"""
@@ -479,30 +563,210 @@ def secoes_da_inicial(config):
         depois = next((n + 1 for n, s in enumerate(escolhidas) if s["id"] == "destaques"), 0)
         escolhidas.insert(depois, dict(conhecidas["empreendimentos"]))
         vistas.add("empreendimentos")
+    if escolhidas:
+        # Seções novas que o painel ainda não lista entram perto de onde fazem sentido.
+        for nova, vizinha, depois in (("bairros", "numeros", True), ("chamadas", "sobre", False)):
+            if nova in vistas:
+                continue
+            posicao = next((n + (1 if depois else 0) for n, s in enumerate(escolhidas) if s["id"] == vizinha), len(escolhidas))
+            escolhidas.insert(posicao, dict(conhecidas[nova]))
+            vistas.add(nova)
     return [s for s in escolhidas + [s for s in SECOES_PADRAO if s["id"] not in vistas] if s.get("visivel", True)]
+
+
+PLURAL_DO_TIPO = {"CASA": "Casas", "APARTAMENTO": "Apartamentos", "TERRENO": "Terrenos", "CHACARA": "Chácaras", "COMERCIAL": "Imóveis comerciais", "SOBRADO": "Sobrados"}
+VALORES_DA_BUSCA = {
+    "venda": [300000, 500000, 800000, 1000000, 1500000, 2000000, 3000000],
+    "locacao": [1000, 1500, 2000, 2500, 3500, 5000, 8000],
+}
+
+
+def valor_curto(valor):
+    """R$ 500 mil, R$ 1,5 milhão, R$ 2.500."""
+    if valor >= 1000000:
+        milhoes = valor / 1000000
+        texto = f"{milhoes:.1f}".rstrip("0").rstrip(".").replace(".", ",")
+        return f"R$ {texto} {'milhão' if milhoes < 2 else 'milhões'}"
+    if valor >= 100000:
+        return f"R$ {valor // 1000} mil"
+    return reais(valor)
+
+
+def opcoes_de_valor(finalidade):
+    return '<option value="">Qualquer valor</option>' + "".join(
+        f'<option value="{v}">{e(valor_curto(v))}</option>' for v in VALORES_DA_BUSCA[finalidade]
+    )
+
+
+def busca_da_inicial(config, imoveis):
+    tipos = sorted({i["tipo"] for i in imoveis if i.get("tipo")}, key=nome_tipo)
+    bairros = sorted({i["bairro"] for i in imoveis if i.get("bairro")})
+    contagem = {}
+    for i in imoveis:
+        if i.get("venda") and i.get("tipo") in PLURAL_DO_TIPO:
+            contagem[i["tipo"]] = contagem.get(i["tipo"], 0) + 1
+    atalhos = [
+        f'<a class="procura-atalho" href="/comprar/?tipo={e(urllib.parse.quote(t))}">{e(PLURAL_DO_TIPO[t])}</a>'
+        for t, _ in sorted(contagem.items(), key=lambda x: -x[1])[:3]
+    ]
+    if any(i.get("venda") and (i.get("dormitorios") or 0) >= 3 for i in imoveis):
+        atalhos.append('<a class="procura-atalho" href="/comprar/?quartos=3">3 quartos ou mais</a>')
+    if any(i.get("locacao") and 0 < (numero(i.get("valor_locacao")) or 0) <= 2500 for i in imoveis):
+        atalhos.append('<a class="procura-atalho" href="/alugar/?valor=2500">Aluguel até R$ 2.500</a>')
+    lancamentos = '<a class="procura-aba" href="/empreendimentos/">Lançamentos</a>' if EMPREENDIMENTOS else ""
+    valores = html.escape(json.dumps({"venda": opcoes_de_valor("venda"), "locacao": opcoes_de_valor("locacao")}, ensure_ascii=False), quote=True)
+    return f"""<form class="procura" action="/comprar/" method="get" data-busca data-valores="{valores}">
+      <fieldset class="procura-abas">
+        <legend class="invisivel">O que você procura</legend>
+        <label><input type="radio" name="finalidade" value="/comprar/" data-tipo-valor="venda" checked><span class="procura-aba">Comprar</span></label>
+        <label><input type="radio" name="finalidade" value="/alugar/" data-tipo-valor="locacao"><span class="procura-aba">Alugar</span></label>
+        {lancamentos}
+      </fieldset>
+      <div class="procura-campos">
+        <label class="procura-campo"><span>Bairro</span><select name="bairro"><option value="">Todos os bairros</option>{opcoes(bairros)}</select></label>
+        <label class="procura-campo"><span>Tipo</span><select name="tipo"><option value="">Todos os tipos</option>{opcoes(tipos, nome_tipo)}</select></label>
+        <label class="procura-campo"><span>Até</span><select name="valor">{opcoes_de_valor("venda")}</select></label>
+        <button class="botao procura-botao" type="submit">{e(botao(config, 'busca'))}</button>
+      </div>
+      {f'<div class="procura-atalhos" aria-label="Buscas rápidas">{"".join(atalhos)}</div>' if atalhos else ''}
+    </form>"""
+
+
+def selo_da_capa(config):
+    partes = ["Campo Grande (MS)"]
+    if config.get("creci"):
+        partes.append(str(config["creci"]))
+    return " · ".join(partes)
+
+
+def capa_da_inicial(config, fundo, chamada):
+    opcoes_abertura = abertura(config)
+    forca = opcoes_abertura["escurecer"] / 100
+    r, g, b = rgb(misturar(cor(config, "principal"), "#000000", 0.5))
+    foto = f'<img class="capa-foto" src="{e(fundo)}" alt="" fetchpriority="high" decoding="async">' if fundo else ""
+    return f"""<section class="capa{' centro' if opcoes_abertura['centro'] else ''}" style="--capa-cor: {r}, {g}, {b}; --capa-forca: {forca:.2f}">
+  {foto}
+  <div class="largura capa-miolo">
+    <p class="capa-selo">{e(selo_da_capa(config))}</p>
+    <h1 data-revelar>{e(config.get('titulo'))}</h1>
+    {f'<p class="capa-sub">{e(config.get("subtitulo"))}</p>' if config.get('subtitulo') else ''}
+    {chamada}
+  </div>
+</section>"""
+
+
+def bairros_em_destaque(imoveis, limite=4):
+    grupos = {}
+    for i in imoveis:
+        if i.get("bairro"):
+            grupos.setdefault(i["bairro"], []).append(i)
+    escolhidos = []
+    for bairro, lista in sorted(grupos.items(), key=lambda x: (-len(x[1]), x[0])):
+        # Casas com muitas fotos costumam ter a fachada de verdade na capa; apartamento
+        # de lançamento às vezes abre com a arte do empreendimento.
+        ordem_do_tipo = {"CASA": 0, "SOBRADO": 0, "TWO STORY HOUSE": 0, "APARTAMENTO": 1}
+        com_foto = sorted(
+            (i for i in lista if so_https(i.get("foto_principal"))),
+            key=lambda i: (ordem_do_tipo.get(i.get("tipo"), 2), -len(i.get("fotos") or [])),
+        )
+        if len(lista) < 3 or not com_foto:
+            continue
+        venda = sum(1 for i in lista if i.get("venda"))
+        escolhidos.append({
+            "bairro": bairro,
+            "total": len(lista),
+            "foto": so_https(com_foto[0].get("foto_mini")) or so_https(com_foto[0].get("foto_principal")),
+            "imovel": com_foto[0],
+            "caminho": "/comprar/" if venda * 2 >= len(lista) else "/alugar/",
+        })
+        if len(escolhidos) >= limite:
+            break
+    return escolhidos
+
+
+def secao_bairros(titulo, imoveis):
+    bairros = bairros_em_destaque(imoveis)
+    if len(bairros) < 3:
+        return ""
+    itens = "".join(
+        f"""<a class="bairro-item" href="{b['caminho']}?bairro={e(urllib.parse.quote(b['bairro']))}">
+      <img src="{e(b['foto'])}" alt="" loading="lazy" decoding="async">{marca_dagua(b['imovel'])}
+      <span class="bairro-texto"><b>{e(b['bairro'])}</b><small>{b['total']} imóve{'is' if b['total'] != 1 else 'l'}</small></span>
+    </a>"""
+        for b in bairros
+    )
+    return f"""<section class="largura secao sobe">
+  <div class="secao-cabeca">
+    <div><h2>{e(titulo)}</h2><p class="secao-sub">Os bairros com mais opções hoje. Toque para ver o que está disponível.</p></div>
+    <a href="/comprar/">Ver todos</a>
+  </div>
+  <div class="bairros-sanfona">{itens}</div>
+</section>"""
+
+
+def faixa_de_numeros(imoveis):
+    venda = sum(1 for i in imoveis if i.get("venda"))
+    locacao = sum(1 for i in imoveis if i.get("locacao"))
+    bairros = len({i["bairro"] for i in imoveis if i.get("bairro")})
+    itens = [
+        ("/comprar/", venda, "imóveis para comprar"),
+        ("/alugar/", locacao, "imóveis para alugar"),
+    ]
+    if EMPREENDIMENTOS:
+        n = len(EMPREENDIMENTOS)
+        itens.append(("/empreendimentos/", n, "lançamento" if n == 1 else "lançamentos"))
+    itens.append((None, bairros, "bairros com imóveis"))
+    html_itens = "".join(
+        (f'<a class="numero-item" href="{c}">' if c else '<div class="numero-item">')
+        + f'<b data-contar="{n}">{n}</b><small>{e(t)}</small>'
+        + ("</a>" if c else "</div>")
+        for c, n, t in itens
+    )
+    return f"""<section class="faixa-numeros"><div class="largura numeros-grade">{html_itens}</div></section>"""
+
+
+def faixa_do_lancamento(emp):
+    fotos = fotos_do_empreendimento(emp)
+    tipo = TIPOS_DE_EMPREENDIMENTO.get(emp.get("tipo"), "Empreendimento")
+    linha = " · ".join(x for x in [tipo, emp.get("bairro"), preco_do_empreendimento(emp)] if x)
+    status = emp.get("status") if emp.get("status") in STATUS_DO_EMPREENDIMENTO else "lancamento"
+    return f"""<a class="faixa-lancamento sobe" href="{e(href(caminho_do_empreendimento(emp)))}">
+    {f'<img src="{e(fotos[0])}" alt="" loading="lazy" decoding="async">' if fotos else ''}
+    <span class="faixa-lancamento-texto">
+      <span class="capa-selo">{e(STATUS_DO_EMPREENDIMENTO[status])}</span>
+      <b>{e(emp['nome'])}</b>
+      {f'<span>{e(linha)}</span>' if linha else ''}
+      <span class="botao">Conhecer o empreendimento</span>
+    </span>
+  </a>"""
+
+
+def secao_chamadas(config):
+    anunciar = link_whatsapp(config, f"Olá! Quero vender ou alugar meu imóvel com a {config.get('nome') or 'imobiliária'}.")
+    procurar = link_whatsapp(config, "Olá! Não achei no site o imóvel que procuro. Posso contar o que preciso?")
+    return f"""<section class="largura secao chamadas">
+  <div class="chamada-bloco claro sobe">
+    <h2>Quer vender ou alugar o seu imóvel?</h2>
+    <p>Conte para a gente como ele é. A equipe avalia, anuncia e acompanha as visitas com você.</p>
+    <a class="botao" href="{e(anunciar)}" rel="noopener" target="_blank">Anunciar meu imóvel</a>
+  </div>
+  <div class="chamada-bloco escuro sobe">
+    <h2>Não achou o que procura?</h2>
+    <p>Diga o que você precisa e um corretor procura por você e avisa pelo WhatsApp.</p>
+    <a class="botao zap" href="{e(procurar)}" rel="noopener" target="_blank">{icone('zap')}Falar com um corretor</a>
+  </div>
+</section>"""
 
 
 def pagina_inicial(config, imoveis, versao):
     destaques = escolher_destaques(config, imoveis)
     fundo = so_https(config.get("banner_url")) or next((so_https(i.get("foto_principal")) for i in destaques if i.get("foto_principal")), "")
-    tipos = sorted({i["tipo"] for i in imoveis if i.get("tipo")}, key=nome_tipo)
-    bairros = sorted({i["bairro"] for i in imoveis if i.get("bairro")})
-    venda = sum(1 for i in imoveis if i.get("venda"))
-    locacao = sum(1 for i in imoveis if i.get("locacao"))
     opcoes_abertura = abertura(config)
     if opcoes_abertura["busca"]:
-        chamada = f"""<form class="busca" action="/comprar/" method="get" data-busca>
-      <fieldset class="busca-finalidade">
-        <legend class="invisivel">O que você procura</legend>
-        <label><input type="radio" name="finalidade" value="/comprar/" checked><span>Comprar</span></label>
-        <label><input type="radio" name="finalidade" value="/alugar/"><span>Alugar</span></label>
-      </fieldset>
-      <label>Tipo<select name="tipo"><option value="">Todos</option>{opcoes(tipos, nome_tipo)}</select></label>
-      <label>Bairro<select name="bairro"><option value="">Todos</option>{opcoes(bairros)}</select></label>
-      <button class="botao" type="submit">{e(botao(config, 'busca'))}</button>
-    </form>"""
+        chamada = busca_da_inicial(config, imoveis)
     else:
         chamada = """<p class="abertura-botoes"><a class="botao" href="/comprar/">Imóveis para comprar</a> <a class="botao claro" href="/alugar/">Imóveis para alugar</a></p>"""
+    capa = not BANNERS
     if BANNERS:
         # Com banners ligados, o carrossel abre a página; a busca fica logo abaixo.
         fundo = BANNERS[0]["imagem_url"]
@@ -512,35 +776,33 @@ def pagina_inicial(config, imoveis, versao):
         else:
             partes.append(f"""<h1 class="invisivel">{e(config.get('titulo'))}</h1>""")
     else:
-        partes = [f"""<section class="abertura{' centro' if opcoes_abertura['centro'] else ''}"{fundo_da_abertura(config, fundo)}>
-  <div class="largura">
-    <h1>{e(config.get('titulo'))}</h1>
-    <p class="abertura-sub">{e(config.get('subtitulo'))}</p>
-    {chamada}
-  </div>
-</section>"""]
+        partes = [capa_da_inicial(config, fundo, chamada)]
+    total_venda = sum(1 for i in imoveis if i.get("venda"))
     for secao in secoes_da_inicial(config):
         if secao["id"] == "destaques" and destaques:
             partes.append(f"""<section class="largura secao">
-  <div class="secao-cabeca">
-    <h2>{e(secao.get('titulo') or 'Imóveis em destaque')}</h2>
-    <a href="/comprar/">Ver todos</a>
+  <div class="secao-cabeca sobe">
+    <div><h2>{e(secao.get('titulo') or 'Imóveis em destaque')}</h2><p class="secao-sub">Escolhidos pela equipe, com fotos e dados conferidos.</p></div>
+    <a href="/comprar/">Ver os {total_venda} imóveis</a>
   </div>
-  <div class="grade-imoveis destaques">{''.join(cartao(i) for i in destaques)}</div>
+  <div class="grade-imoveis destaques">{''.join(cartao(i).replace('class="cartao"', 'class="cartao sobe"', 1) for i in destaques)}</div>
 </section>""")
         elif secao["id"] == "empreendimentos" and EMPREENDIMENTOS:
+            outros = EMPREENDIMENTOS[1:4]
             partes.append(f"""<section class="largura secao">
-  <div class="secao-cabeca">
+  <div class="secao-cabeca sobe">
     <h2>{e(secao.get('titulo') or 'Lançamentos e empreendimentos')}</h2>
     <a href="/empreendimentos/">Ver todos</a>
   </div>
-  <div class="grade-imoveis destaques">{''.join(cartao_do_empreendimento(m) for m in EMPREENDIMENTOS[:3])}</div>
+  {faixa_do_lancamento(EMPREENDIMENTOS[0])}
+  {f'<div class="grade-imoveis destaques lancamentos-mais">{"".join(cartao_do_empreendimento(m) for m in outros)}</div>' if outros else ''}
 </section>""")
         elif secao["id"] == "numeros":
-            partes.append(f"""<section class="largura secao atalhos">
-  <a class="atalho" href="/comprar/"><b>{venda}</b><span>imóveis para comprar</span></a>
-  <a class="atalho" href="/alugar/"><b>{locacao}</b><span>imóveis para alugar</span></a>
-</section>""")
+            partes.append(faixa_de_numeros(imoveis))
+        elif secao["id"] == "bairros":
+            partes.append(secao_bairros(secao.get("titulo") or "Bairros para começar", imoveis))
+        elif secao["id"] == "chamadas":
+            partes.append(secao_chamadas(config))
         elif secao["id"] == "equipe" and EQUIPE:
             partes.append(secao_equipe(secao.get("titulo") or "Nossa equipe"))
         elif secao["id"] == "sobre":
@@ -555,33 +817,39 @@ def pagina_inicial(config, imoveis, versao):
   </div>
 </section>""")
     descricao = texto_extra(config, "descricao_google", config.get("subtitulo") or "")
-    return pagina(config, versao, f"{config.get('nome')} | Imóveis em Campo Grande (MS)", descricao, "\n".join(partes), imagem=fundo)
+    return pagina(config, versao, f"{config.get('nome')} | Imóveis em Campo Grande (MS)", descricao, "\n".join(partes), imagem=fundo, capa=capa)
 
 
 def pagina_lista(config, imoveis, finalidade, versao):
     dados = FINALIDADES[finalidade]
+    # A ordem do banco é a dos mais recentes; ela vira data-ordem para "Mais recentes".
     daqui = [i for i in imoveis if i.get(finalidade)]
-    daqui.sort(key=lambda i: numero(i.get(dados["campo"])) or 10**12)
     tipos = sorted({i["tipo"] for i in daqui if i.get("tipo")}, key=nome_tipo)
     bairros = sorted({i["bairro"] for i in daqui if i.get("bairro")})
     corpo = f"""<section class="largura secao lista" data-lista>
   <h1>{e(dados['titulo'])}</h1>
-  <form class="filtros" data-filtros>
+  <button class="botao secundario abrir-filtros" type="button" data-abrir-filtros aria-expanded="false" aria-controls="filtros-lista" hidden>{icone('filtro')}Filtros<span class="quantos-filtros" data-quantos-filtros></span></button>
+  <form class="filtros" id="filtros-lista" data-filtros>
     <label>Tipo<select name="tipo"><option value="">Todos</option>{opcoes(tipos, nome_tipo)}</select></label>
     <label>Bairro<select name="bairro"><option value="">Todos</option>{opcoes(bairros)}</select></label>
     <label>Valor até<input name="valor" inputmode="numeric" placeholder="{'3000' if finalidade == 'locacao' else '500000'}"></label>
     <label>Quartos<select name="quartos"><option value="">Qualquer</option><option value="1">1 ou mais</option><option value="2">2 ou mais</option><option value="3">3 ou mais</option><option value="4">4 ou mais</option></select></label>
   </form>
-  <p class="contagem" role="status" data-contagem>{len(daqui)} imóveis</p>
-  <div class="grade-imoveis" data-grade>{''.join(cartao(i, finalidade) for i in daqui)}</div>
+  <div class="lista-barra">
+    <p class="contagem" role="status" data-contagem>{len(daqui)} imóveis</p>
+    <label class="ordenar">Ordenar por <select data-ordenar><option value="recentes">Mais recentes</option><option value="menor">Menor valor</option><option value="maior">Maior valor</option></select></label>
+  </div>
+  <div class="grade-imoveis" data-grade>{''.join(cartao(i, finalidade, n) for n, i in enumerate(daqui))}</div>
   <p class="vazio" data-vazio hidden>Nenhum imóvel com esses filtros agora. Tente mudar o bairro ou o valor, ou <a href="{e(link_whatsapp(config, 'Olá! Não achei no site o imóvel que procuro. Pode me ajudar?'))}" rel="noopener" target="_blank">fale com a gente</a>.</p>
   <button class="botao secundario mais" type="button" data-mais hidden>Mostrar mais</button>
 </section>"""
     return pagina(config, versao, f"{dados['titulo']} em Campo Grande | {config.get('nome')}", f"{dados['titulo']} em Campo Grande (MS) e região, com fotos e valores.", corpo, caminho=dados["caminho"])
 
 
-def linha_dado(rotulo, valor):
-    return f"<div><dt>{e(rotulo)}</dt><dd>{e(valor)}</dd></div>" if valor else ""
+def linha_dado(rotulo, valor, icone_nome=None):
+    if not valor:
+        return ""
+    return f"<div>{icone(icone_nome) if icone_nome else ''}<dt>{e(rotulo)}</dt><dd>{e(valor)}</dd></div>"
 
 
 def pagina_imovel(config, imovel, imoveis, versao):
@@ -589,14 +857,16 @@ def pagina_imovel(config, imovel, imoveis, versao):
     tipo = nome_tipo(imovel.get("tipo"))
     local = f"{imovel.get('bairro')}, {imovel.get('cidade')} - {imovel.get('uf')}"
     titulo_curto = f"{tipo} em {imovel.get('bairro')}"
+    titulo_claro = titulo_do_imovel(imovel)
     fotos = [so_https(f) for f in imovel.get("fotos") or []]
     fotos = [f for f in fotos if f] or ([so_https(imovel.get("foto_principal"))] if so_https(imovel.get("foto_principal")) else [])
     marca = marca_dagua(imovel)
     galeria = "".join(
-        f'<span class="foto-galeria"><img src="{e(f)}" alt="Foto {n} de {len(fotos)}: {e(titulo_curto)}"{"" if n == 1 else " loading=" + chr(34) + "lazy" + chr(34)}>{marca}</span>'
+        f'<span class="foto-galeria"><img src="{e(f)}" alt="Foto {n} de {len(fotos)}: {e(titulo_curto)}"{"" if n <= 5 else " loading=" + chr(34) + "lazy" + chr(34)}>{marca}</span>'
         for n, f in enumerate(fotos, 1)
     ) or '<span class="sem-foto">Sem foto</span>'
     conversa = link_whatsapp(config, f"Olá! Tenho interesse no imóvel {imovel.get('referencia')} ({titulo_curto}).")
+    visita = link_whatsapp(config, f"Olá! Quero agendar uma visita ao imóvel {imovel.get('referencia')} ({titulo_curto}).")
     precos = []
     if imovel.get("venda"):
         precos.append(("Venda", preco_do_imovel(imovel, "venda")))
@@ -608,13 +878,13 @@ def pagina_imovel(config, imovel, imoveis, versao):
     if numero(imovel.get("valor_iptu")):
         extras.append(f"IPTU {reais(imovel['valor_iptu'])}")
     dados = "".join([
-        linha_dado("Quartos", imovel.get("dormitorios")),
-        linha_dado("Suítes", imovel.get("suites")),
-        linha_dado("Banheiros", imovel.get("banheiros")),
-        linha_dado("Vagas", imovel.get("vagas")),
-        linha_dado("Área construída", metros(numero(imovel["area_construida"])) if numero(imovel.get("area_construida")) else None),
-        linha_dado("Área útil", metros(numero(imovel["area_util"])) if numero(imovel.get("area_util")) else None),
-        linha_dado("Terreno", metros(numero(imovel["area_terreno"])) if numero(imovel.get("area_terreno")) else None),
+        linha_dado("Quartos", imovel.get("dormitorios"), "quartos"),
+        linha_dado("Suítes", imovel.get("suites"), "suites"),
+        linha_dado("Banheiros", imovel.get("banheiros"), "banheiros"),
+        linha_dado("Vagas", imovel.get("vagas"), "vagas"),
+        linha_dado("Área construída", metros(numero(imovel["area_construida"])) if numero(imovel.get("area_construida")) else None, "area"),
+        linha_dado("Área útil", metros(numero(imovel["area_util"])) if numero(imovel.get("area_util")) else None, "area"),
+        linha_dado("Terreno", metros(numero(imovel["area_terreno"])) if numero(imovel.get("area_terreno")) else None, "terreno"),
     ])
     selos = [COMODIDADES[c] for c in imovel.get("comodidades") or [] if c in COMODIDADES]
     if imovel.get("aceita_financiamento"):
@@ -631,7 +901,7 @@ def pagina_imovel(config, imovel, imoveis, versao):
         if i["codigo"] != imovel["codigo"] and i.get("tipo") == imovel.get("tipo") and bool(i.get("venda")) == bool(imovel.get("venda"))
     ][:3]
     secao_parecidos = (
-        f'<section class="largura secao"><h2>Parecidos com este</h2><div class="grade-imoveis">{"".join(cartao(i) for i in parecidos)}</div></section>'
+        f'<section class="parecidos"><div class="largura secao"><h2>Parecidos com este</h2><div class="grade-imoveis">{"".join(cartao(i) for i in parecidos)}</div></div></section>'
         if parecidos else ""
     )
     voltar = FINALIDADES["venda" if imovel.get("venda") else "locacao"]
@@ -642,29 +912,38 @@ def pagina_imovel(config, imovel, imoveis, versao):
         f"""{f"<small>{e(responsavel['creci'] if str(responsavel['creci']).upper().startswith('CRECI') else 'CRECI ' + str(responsavel['creci']))}</small>" if (responsavel.get('creci') or '').strip() else ''}</span></div>"""
         if responsavel and responsavel.get("nome") else ""
     )
-    barra = f"""<div class="barra-movel"><span><b>{e(precos[0][1] if precos else '')}</b><small>{e(imovel.get('referencia'))}</small></span><a class="botao" href="{e(conversa)}" rel="noopener" target="_blank" data-clique="{e(imovel.get('referencia'))}">{interesse}</a></div>"""
+    barra = f"""<div class="barra-movel"><a class="botao secundario" href="{e(visita)}" rel="noopener" target="_blank" data-clique="{e(imovel.get('referencia'))}">{icone('agenda')}Visita</a><a class="botao zap" href="{e(conversa)}" rel="noopener" target="_blank" data-clique="{e(imovel.get('referencia'))}">{icone('zap')}{interesse}</a></div>"""
+    texto_completo = com_rodape(imovel) or ""
+    longa = len(texto_completo) > 600
+    texto_ampliar = f"Ver as {len(fotos)} fotos" if len(fotos) > 1 else "Ver a foto"
     corpo = f"""<article class="largura imovel">
   <p class="trilha"><a href="{voltar['caminho']}">{voltar['titulo']}</a> › {e(imovel.get('bairro'))}</p>
   <div class="galeria-caixa">
-    <div class="galeria" tabindex="0" role="group" aria-label="Fotos do imóvel" data-galeria>{galeria}</div>
+    <div class="galeria{' mosaico' if len(fotos) >= 5 else ''}" tabindex="0" role="group" aria-label="Fotos do imóvel" data-galeria>{galeria}</div>
     <button class="seta anterior" type="button" aria-label="Foto anterior" data-seta="-1" hidden>‹</button>
     <button class="seta proxima" type="button" aria-label="Próxima foto" data-seta="1" hidden>›</button>
-    <button class="ampliar" type="button" data-ampliar hidden>Ver fotos em tela cheia</button>
+    <button class="ampliar" type="button" data-ampliar hidden>{icone('fotos')}{e(texto_ampliar)}</button>
   </div>
   <div class="imovel-grade">
     <div>
-      <h1>{e(imovel.get('titulo') or titulo_curto)}</h1>
-      <p class="imovel-local">{e(tipo)} · {e(local)}</p>
+      <p class="imovel-tipo">{e(tipo)} {'à venda' if imovel.get('venda') else 'para alugar'}</p>
+      <h1>{e(titulo_claro)}</h1>
+      <p class="imovel-local">{icone('local')}<span>{e(local)}</span><small>Ref. {e(imovel.get('referencia'))}</small></p>
+      <p class="preco-topo">{e(precos[0][1] if precos else '')}{f'<small>{e(" · ".join(extras))}</small>' if extras else ''}</p>
       <dl class="dados">{dados}</dl>
-      {f'<ul class="selos">{"".join(f"<li>{e(s)}</li>" for s in selos)}</ul>' if selos else ''}
-      <div class="descricao">{paragrafos(com_rodape(imovel))}</div>
+      {f'<h2 class="imovel-sub">O que tem</h2><ul class="selos">{"".join(f"<li>{e(s)}</li>" for s in selos)}</ul>' if selos else ''}
+      <h2 class="imovel-sub">Sobre o imóvel</h2>
+      {f'<p class="anuncio-titulo">{e(imovel.get("titulo"))}</p>' if imovel.get('titulo') and imovel.get('titulo') != titulo_claro else ''}
+      <div class="descricao{' fechada' if longa else ''}" id="descricao" data-descricao>{paragrafos(texto_completo)}</div>
+      {'<button class="ler-mais" type="button" data-ler-mais aria-controls="descricao" aria-expanded="false" hidden>Ler a descrição completa</button>' if longa else ''}
     </div>
     <aside class="caixa-preco">
       {''.join(f'<p class="preco-linha"><small>{e(r)}</small><b>{e(v)}</b></p>' for r, v in precos)}
       {f'<p class="preco-extra">{e(" · ".join(extras))}</p>' if extras else ''}
       {caixa_corretor}
-      <a class="botao largo" href="{e(conversa)}" rel="noopener" target="_blank" data-clique="{e(imovel.get('referencia'))}">{interesse}</a>
-      <p class="preco-extra">Referência {e(imovel.get('referencia'))}. A resposta chega pelo WhatsApp, a qualquer hora.</p>
+      <a class="botao largo zap" href="{e(conversa)}" rel="noopener" target="_blank" data-clique="{e(imovel.get('referencia'))}">{icone('zap')}{interesse}</a>
+      <a class="botao largo secundario" href="{e(visita)}" rel="noopener" target="_blank" data-clique="{e(imovel.get('referencia'))}">{icone('agenda')}Agendar visita</a>
+      <p class="preco-extra">A resposta chega pelo WhatsApp, a qualquer hora.</p>
     </aside>
   </div>
 </article>
@@ -1306,6 +1585,7 @@ def gerar(dados, pasta, versao):
     shutil.copy(AQUI / "estilo.css", pasta / "estilo.css")
     shutil.copy(AQUI / "site.js", pasta / "site.js")
     shutil.copy(AQUI / "logo-lfg.png", pasta / "logo-lfg.png")
+    shutil.copy(AQUI / "logo-lfg-branca.png", pasta / "logo-lfg-branca.png")
 
     escrever(pasta, "/", pagina_inicial(config, imoveis, versao))
     escrever(pasta, "/comprar/", pagina_lista(config, imoveis, "venda", versao))
