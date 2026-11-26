@@ -1584,3 +1584,78 @@ button.botao-fechar, .folha-mais button.botao-fechar {
 .participante-opcao { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 6px 12px; border: 1px solid var(--linha-forte); border-radius: var(--raio-pilula); background: var(--campo-fundo); cursor: pointer; font-size: var(--tam-pequeno); }
 .participante-opcao.marcado { border-color: var(--limao); background: var(--pronto-fundo); color: var(--limao-texto); font-weight: 700; }
 .participante-opcao input { margin: 0; accent-color: var(--limao); }
+
+/* ---------- Locação (Etapa 1) ---------- */
+.grade-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.campo-par { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px; }
+.aviso-locacao { margin: 0; padding: 12px 14px; border: 1px solid var(--atencao); border-radius: var(--raio-p); background: var(--atencao-fundo); color: var(--texto); font-size: var(--tam-pequeno); }
+.etapas-locacao { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.etapas-locacao li { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--linha); border-radius: var(--raio-p); }
+.etapas-locacao li div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.etapas-locacao li.pronta { border-color: var(--limao); background: var(--pronto-fundo); }
+.etapa-numero { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--painel-2); color: var(--texto-2); font-weight: 800; font-size: var(--tam-mini); }
+.etapas-locacao li.pronta .etapa-numero { background: var(--limao); color: var(--limao-tinta); }
+.unidades-locacao li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--linha); }
+.historico-locacao li { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--linha); font-size: var(--tam-pequeno); }
+@media (max-width: 760px) {
+  .grade-3 { grid-template-columns: minmax(0, 1fr); }
+  .historico-locacao li { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}
+
+/* ---------- Locação (Etapa 2): Pessoas e Imóveis administrados ---------- */
+.pessoa-linha { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.pessoa-linha > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.papel-etiqueta { margin: 0 4px 4px 0; }
+.ficha-locacao { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 20px; align-items: start; }
+.ficha-locacao-menu { position: sticky; top: calc(var(--altura-topo-pc) + 16px); display: flex; flex-direction: column; gap: 2px; padding: 8px; border: 1px solid var(--linha); border-radius: var(--raio); background: var(--painel); }
+.ficha-locacao-menu a { padding: 8px 10px; border-radius: var(--raio-p); color: var(--texto-2); font-weight: 700; font-size: var(--tam-pequeno); text-decoration: none; }
+.ficha-locacao-menu a:hover { background: var(--hover); color: var(--texto); }
+.ficha-locacao-corpo { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ficha-locacao-corpo > fieldset, .formulario > fieldset.painel { margin: 0; scroll-margin-top: calc(var(--altura-topo-pc) + 16px); }
+fieldset.painel > legend { float: left; width: 100%; padding: 0; margin-bottom: 12px; color: var(--titulo); font-size: var(--tam-subtitulo); font-weight: 700; }
+fieldset.painel > legend + * { clear: both; }
+.lista-campos { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.lista-campos .campo { width: 100%; }
+.barra-salvar { position: sticky; bottom: 12px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border: 1px solid var(--linha-forte); border-radius: var(--raio); background: var(--vidro); backdrop-filter: blur(8px); }
+.escolher-pessoa { max-height: 46vh; overflow-y: auto; }
+.escolher-pessoa button { all: unset; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 10px 12px; border-radius: var(--raio-p); cursor: pointer; }
+.escolher-pessoa button:hover, .escolher-pessoa button:focus-visible { background: var(--hover); }
+.resumo-imovel-locacao { display: flex; gap: 16px; align-items: flex-start; }
+.resumo-imovel-locacao img { width: 180px; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--raio-p); flex: none; }
+.resumo-imovel-locacao h2 { margin: 0; }
+.pares-linha { display: flex; flex-wrap: wrap; gap: 4px 20px; margin: 0; }
+.pares-linha dt { color: var(--texto-3); font-size: var(--tam-mini); }
+.pares-linha dd { margin: 0 8px 0 0; font-weight: 700; }
+.linha-locador { display: grid; grid-template-columns: minmax(0, 1fr) 110px auto; gap: 12px; align-items: end; padding: 10px 0; border-bottom: 1px solid var(--linha); }
+.percentual-locador { margin: 0; }
+@media (max-width: 900px) {
+  .ficha-locacao { grid-template-columns: minmax(0, 1fr); }
+  .ficha-locacao-menu { position: static; flex-direction: row; overflow-x: auto; scrollbar-width: none; }
+  .ficha-locacao-menu a { white-space: nowrap; }
+}
+@media (max-width: 640px) {
+  .resumo-imovel-locacao { flex-direction: column; }
+  .resumo-imovel-locacao img { width: 100%; }
+  .linha-locador { grid-template-columns: minmax(0, 1fr) 90px; }
+  .linha-locador > button { grid-column: 1 / -1; justify-self: start; }
+}
+
+/* Locação → Contratos */
+.indicadores-locacao { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); margin-bottom: 16px; }
+a.indicador { color: inherit; text-decoration: none; }
+a.indicador:hover { border-color: var(--azul); }
+.tabela-contratos td { vertical-align: top; }
+.tabela-contratos td > span { display: block; }
+.contrato-linha { display: flex !important; align-items: center; gap: 10px; }
+.bolinha-situacao { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; border: 1px solid var(--linha-forte); background: var(--painel-2); }
+.bolinha-situacao.pronto { background: var(--pronto-solido); color: var(--limao-texto); border-color: var(--limao); }
+.bolinha-situacao.alerta { background: var(--atencao-solido); color: var(--atencao); border-color: var(--atencao); }
+.etiqueta-filtro { display: inline-flex; align-items: center; gap: 6px; padding: 6px 6px 6px 12px; border: 1px solid var(--azul); border-radius: 999px; font-weight: 700; font-size: var(--tam-pequeno); }
+.etiqueta-filtro button { border: 0; background: var(--painel-2); color: var(--texto); width: 24px; height: 24px; min-height: 0; border-radius: 50%; cursor: pointer; padding: 0; }
+.resumo-escolha { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.resumo-escolha > div:first-child { display: flex; flex-direction: column; gap: 4px; }
+.linha-parte { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--linha); }
+.demonstrativo { max-height: 460px; overflow: auto; }
+.demonstrativo table { width: 100%; }
+.demonstrativo th { position: sticky; top: 0; background: var(--painel); z-index: 1; }
+.demonstrativo tr.anterior td { color: var(--texto-3); }

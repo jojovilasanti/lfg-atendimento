@@ -9,6 +9,10 @@ import Entrar from "./paginas/Entrar.jsx";
 import Imoveis from "./paginas/Imoveis.jsx";
 import Inicio from "./paginas/Inicio.jsx";
 import Leads from "./paginas/Leads.jsx";
+import Locacao from "./paginas/Locacao.jsx";
+import Contratos from "./paginas/Contratos.jsx";
+import Pessoas from "./paginas/Pessoas.jsx";
+import Administrados from "./paginas/Administrados.jsx";
 import Perfil, { iniciais } from "./paginas/Perfil.jsx";
 import Plantao from "./paginas/Plantao.jsx";
 import Disparos from "./paginas/Disparos.jsx";
@@ -34,6 +38,10 @@ const MENU = [
   ["site", "Site", "Aparência e textos do site", <g key="s"><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.6 3.8 5.6 3.8 9s-1.3 6.4-3.8 9c-2.5-2.6-3.8-5.6-3.8-9s1.3-6.4 3.8-9z" /></g>, "Site"],
   ["empreendimentos", "Empreendimentos", "Lançamentos no site", <g key="e"><path d="M3 21h18M5 21V8l5-3v16M10 21V5l9 4v12" /><path d="M13 12h3M13 16h3" /></g>, "Lançamentos"],
   ["disparos", "Disparos", "Mensagens em massa", <g key="d"><path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z" /><path d="M15 9a4 4 0 0 1 0 6M18 6a8 8 0 0 1 0 12" /></g>, "Disparos"],
+  ["locacao", "Locação", "Contratos, cobrança e repasses", <g key="loc"><path d="M7 3h7l4 4v14H7z" /><path d="M14 3v4h4M10 12h5M10 16h5" /></g>, "Locação"],
+  ["contratos", "Contratos", "Contratos de locação", <g key="ctr"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M9 8h6M9 12h6M9 16l2 1.5 4-3.5" /></g>, "Contratos"],
+  ["pessoas", "Pessoas", "Locadores, locatários e fiadores", <g key="pes"><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6" /><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 14.5c2 .7 3.5 2.6 3.5 5.5" /></g>, "Pessoas"],
+  ["administrados", "Imóveis administrados", "Locadores e dados da administração", <g key="adm"><path d="M3 21V10l7-5 7 5v11" /><path d="M8 21v-5h4v5M19 8h2v13h-4" /></g>, "Administrados"],
   ["perfil", "Meu perfil", "Nome, foto, contato e senha", <g key="u"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></g>, "Perfil"],
   ["configuracoes", "Configurações", "Regras, equipe, integrações", <g key="c"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" /></g>, "Ajustes"],
 ];
@@ -43,10 +51,11 @@ const MENU = [
 const GRUPOS = [
   ["Atendimento", ["inicio", "leads", "bolsao", "naoclientes", "plantao", "agenda", "demandas"]],
   ["Estoque", ["imoveis", "portais"]],
+  ["Locação", ["locacao", "contratos", "pessoas", "administrados"]],
   ["Marketing", ["site", "empreendimentos", "disparos"]],
   ["Ajustes", ["perfil", "configuracoes"]],
 ];
-const NO_MAIS = new Set(["naoclientes", "portais", "site", "empreendimentos", "disparos", "configuracoes"]);
+const NO_MAIS = new Set(["locacao", "contratos", "pessoas", "administrados", "naoclientes", "portais", "site", "empreendimentos", "disparos", "configuracoes"]);
 // No celular: a Agenda fica na barra de todos (no lugar de Tarefas); Demandas
 // vai para "Mais", junto com o Perfil do corretor e, no gestor, o Plantão.
 const noMais = (id, papel) => NO_MAIS.has(id) || id === "demandas" || (id === "plantao" && papel === "gestor") || (id === "bolsao" && papel === "administrativo") || (id === "perfil" && papel === "corretor");
@@ -55,7 +64,7 @@ const ICONE_MAIS = <g><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r
 // Telas da gestão (gestor e administrativo) e as só do gestor. Quem chegar numa
 // tela que não é do seu perfil, até pelo endereço direto, volta para o Início.
 // O banco e as funções recusam o resto (perfil_administrativo_regras).
-const SO_GESTAO = new Set(["configuracoes", "empreendimentos", "naoclientes"]);
+const SO_GESTAO = new Set(["configuracoes", "empreendimentos", "naoclientes", "locacao", "contratos", "pessoas", "administrados"]);
 const SO_GESTOR_PLENO = new Set(["site", "disparos", "portais"]);
 // O administrativo não acompanha atendimentos.
 const FORA_DO_ADMINISTRATIVO = new Set(["leads"]);
@@ -74,13 +83,15 @@ const podeVer = (id, papel) => {
 
 // Endereço da tela fica no "#" da barra, para dar para voltar e favoritar.
 function lerEndereco() {
-  const [lida, leadId, acao] = location.hash.slice(1).split("/");
+  const [lida, leadId, acao] = location.hash.slice(1).split("?")[0].split("/");
   // O Funil saiu do menu (as etapas ficam na tela de cada lead): o endereço antigo abre Leads.
   const vista = lida === "funil" ? "leads" : lida;
   return {
     vista: MENU.some(([id]) => id === vista) ? vista : "inicio",
     leadId: vista === "leads" ? leadId ?? null : null,
     imovelAberto: vista === "imoveis" ? leadId ?? null : null,
+    // Pessoas e Imóveis administrados (Locação): o que vem depois da barra abre a ficha.
+    item: ["pessoas", "administrados", "contratos"].includes(vista) ? (leadId ? decodeURIComponent(leadId) : null) : null,
     acao: acao ?? null,
   };
 }
@@ -211,6 +222,10 @@ export default function App() {
     naoclientes: gestor ? <NaoClientes /> : null,
     disparos: eu.papel === "gestor" ? <Disparos /> : null,
     portais: eu.papel === "gestor" ? <Portais /> : null,
+    locacao: gestor ? <Locacao /> : null,
+    contratos: gestor ? <Contratos aberto={endereco.item} ir={ir} /> : null,
+    pessoas: gestor ? <Pessoas aberta={endereco.item} ir={ir} /> : null,
+    administrados: gestor ? <Administrados aberto={endereco.item} ir={ir} /> : null,
     perfil: <Perfil />,
   };
 
